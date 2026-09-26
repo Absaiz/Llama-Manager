@@ -8,7 +8,7 @@ from flask import Blueprint, jsonify, request
 from config import KV_BYTES, LOGS_DIR, MODELS_DIR
 from gguf_meta import get_cached_meta, get_cached_full, infer_capabilities, split_layer_bytes, read_gguf_meta
 from instances import engine_exe, find_draft_sidecars, get_engine, list_devices
-from system_monitor import SYS
+from system_monitor import SYS, attach_live_usage
 
 GIB = 1024 ** 3
 VRAM_SAFETY_MARGIN_GB = 0.8   # margen que dejamos libre por GPU (contexto de escritorio, fragmentación)
@@ -274,16 +274,12 @@ def api_autosplit():
 
     # Total de Vulkan (fiable) + usado de WMI (fiable, ve otros procesos —
     # Vulkan aislado no). Ver nota igual en /api/state.
-    monitor_gpus = list(SYS.get("gpus", []))
-    order_match = (len(all_devices) == len(monitor_gpus) and monitor_gpus)
+    attach_live_usage(all_devices)
     gpu_budgets = []  # [(device_id, free_bytes)]
     for i, d in enumerate(all_devices):
         if device_ids and d["id"] not in device_ids:
             continue
-        if order_match:
-            free_mib = max(d["total_mib"] - monitor_gpus[i]["used_mib"], 0)
-        else:
-            free_mib = d["free_mib"]  # último recurso, sin contrastar con WMI
+        free_mib = max(d["total_mib"] - d["used_mib"], 0)
         free_b = max(free_mib * 1024 * 1024 - VRAM_SAFETY_MARGIN_GB * GIB, 0)
         gpu_budgets.append((d["id"], free_b))
     total_gpu_budget = sum(b for _, b in gpu_budgets)

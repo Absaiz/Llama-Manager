@@ -10,7 +10,7 @@ from instances import (ANTHROPIC_CACHE, INSTANCES, PROXY, RPC_SERVERS,
                        get_engine, health_check,
                        list_devices, list_llama_pids, list_mmprojs, list_models,
                        load_presets)
-from system_monitor import SYS
+from system_monitor import SYS, attach_live_usage
 from versions import APP_VERSION, LLAMA_CPP_BUILD
 
 state_bp = Blueprint("state", __name__)
@@ -30,18 +30,7 @@ def api_state():
     # WMI para el "usado" en vivo, emparejado por orden con los dispositivos
     # Vulkan (el total de WMI, vía AdapterRAM, no es fiable para emparejar
     # por tamaño — desbordamiento de 32 bits en tarjetas >4GB).
-    monitor_gpus = list(SYS["gpus"])
-    if len(devices) == len(monitor_gpus) and monitor_gpus:
-        for i, d in enumerate(devices):
-            d["used_mib"]     = monitor_gpus[i]["used_mib"]
-            d["shared_mib"]   = monitor_gpus[i].get("shared_mib")
-            d["dedicated_mib"] = monitor_gpus[i].get("dedicated_mib")
-            d["vram_live"]    = True
-            d["raw_id"]       = monitor_gpus[i].get("raw_id")
-    else:
-        for d in devices:
-            d["used_mib"]  = max(d["total_mib"] - d.get("free_mib", 0), 0)
-            d["vram_live"] = False
+    attach_live_usage(devices)
 
     managed_pids = set()
     instances = []

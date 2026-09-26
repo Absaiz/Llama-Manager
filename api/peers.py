@@ -32,7 +32,7 @@ from flask import Blueprint, jsonify, request
 
 from config import IS_WINDOWS
 from instances import INSTANCES, get_engine, list_devices
-from system_monitor import SYS
+from system_monitor import SYS, attach_live_usage
 
 peers_bp = Blueprint("peers", __name__)
 
@@ -96,12 +96,10 @@ def api_host():
     # Usada en vivo de system_monitor, emparejada por posición con los
     # dispositivos Vulkan. Si no coincide el nº (p.ej. iGPU extra en el
     # contador de rendimiento), caemos a free_mib del propio motor.
-    monitor_gpus = list(SYS.get("gpus", []))
-    order_match = len(devices) == len(monitor_gpus) and bool(monitor_gpus)
+    attach_live_usage(devices)
     gpus = []
-    for i, d in enumerate(devices):
-        used = monitor_gpus[i]["used_mib"] if order_match else max(
-            d["total_mib"] - d.get("free_mib", 0), 0)
+    for d in devices:
+        used = d["used_mib"]
         gpus.append({
             "id":         d["id"],
             "name":       d["name"],

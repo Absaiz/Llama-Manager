@@ -169,18 +169,99 @@ def _try_nvidia_smi():
     return None
 
 
+# ── Windows: DXGI (LUID → nombre/total) + Get-Counter (uso por LUID) ──────
+_DXGI_CACHE = None
+
+
+def _dxgi_adapters():
+    """Enumera los adaptadores con DXGI vía ctypes (sin dependencias).
+    Devuelve {(luid_high, luid_low): {name, dedicated_total_mib, software}}.
+    Es lo que permite saber QUÉ tarjeta es cada instancia del contador de
+    rendimiento (que solo trae el LUID) en vez de emparejar a ciegas por
+    orden — el orden de los LUID no tiene nada que ver con el de Vulkan0/1.
+    Los adaptadores no cambian en caliente, así que se cachea."""
+    global _DXGI_CACHE
+    if _DXGI_CACHE is not None:
+        return _DXGI_CACHE
+    result = {}
+    try:
+        from ctypes import wintypes
+
+        class GUID(ctypes.Structure):
+            _fields_ = [("d1", ctypes.c_ulong), ("d2", ctypes.c_ushort),
+                        ("d3", ctypes.c_ushort), ("d4", ctypes.c_ubyte * 8)]
+
+        class LUID(ctypes.Structure):
+            _fields_ = [("LowPart", wintypes.DWORD), ("HighPart", ctypes.c_long)]
+
+        class DXGI_ADAPTER_DESC1(ctypes.Structure):
+            _fields_ = [
+                ("Description", ctypes.c_wchar * 128),
+                ("VendorId", ctypes.c_uint), ("DeviceId", ctypes.c_uint),
+                ("SubSysId", ctypes.c_uint), ("Revision", ctypes.c_uint),
+                ("DedicatedVideoMemory", ctypes.c_size_t),
+                ("DedicatedSystemMemory", ctypes.c_size_t),
+                ("SharedSystemMemory", ctypes.c_size_t),
+                ("AdapterLuid", LUID),
+                ("Flags", ctypes.c_uint),
+            ]
+
+        # IID_IDXGIFactory1 = 770aae78-f26f-4dba-a829-253c83d1b387
+        iid = GUID(0x770aae78, 0xf26f, 0x4dba,
+                   (ctypes.c_ubyte * 8)(0xa8, 0x29, 0x25, 0x3c, 0x83, 0xd1, 0xb3, 0x87))
+        factory = ctypes.c_void_p()
+        hr = ctypes.windll.dxgi.CreateDXGIFactory1(ctypes.byref(iid), ctypes.byref(factory))
+        if hr != 0 or not factory:
+            _DXGI_CACHE = {}
+            return _DXGI_CACHE
+
+        def vcall(obj, idx, restype, *argtypes):
+            vtbl = ctypes.cast(obj, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p)))[0]
+            return ctypes.WINFUNCTYPE(restype, ctypes.c_void_p, *argtypes)(vtbl[idx])
+
+        HRESULT = ctypes.c_long
+        i = 0
+        while True:
+            adapter = ctypes.c_void_p()
+            # IDXGIFactory1::EnumAdapters1 = vtable[12]
+            hr = vcall(factory, 12, HRESULT, ctypes.c_uint, ctypes.POINTER(ctypes.c_void_p))(
+                factory, i, ctypes.byref(adapter))
+            if hr != 0 or not adapter:
+                break  # DXGI_ERROR_NOT_FOUND → fin de la lista
+            desc = DXGI_ADAPTER_DESC1()
+            # IDXGIAdapter1::GetDesc1 = vtable[10]
+            if vcall(adapter, 10, HRESULT, ctypes.POINTER(DXGI_ADAPTER_DESC1))(
+                    adapter, ctypes.byref(desc)) == 0:
+                key = (desc.AdapterLuid.HighPart & 0xFFFFFFFF, desc.AdapterLuid.LowPart)
+                result[key] = {
+                    "name": desc.Description.strip(),
+                    "dedicated_total_mib": desc.DedicatedVideoMemory // (1024**2),
+                    # DXGI_ADAPTER_FLAG_SOFTWARE = 2 (Basic Render Driver)
+                    "software": bool(desc.Flags & 2),
+                }
+            vcall(adapter, 2, ctypes.c_ulong)(adapter)  # Release
+            i += 1
+        vcall(factory, 2, ctypes.c_ulong)(factory)  # Release
+    except Exception:
+        result = {}
+    _DXGI_CACHE = result
+    return result
+
+
+_LUID_RE = re.compile(r"luid_0x([0-9a-f]+)_0x([0-9a-f]+)_phys_\d+", re.I)
+
+
 def _try_get_counter_vram():
     """
-    Lee '\\GPU Adapter Memory(*)\\Dedicated Usage' y '...\\Shared Usage'
-    directamente con Get-Counter — el mismo contador de rendimiento crudo
-    que usa el Administrador de tareas por debajo, sin pasar por la capa
-    CIM/WMI (Win32_PerfFormattedData_...) que a veces queda desfasada.
-    Cada instancia se identifica por su LUID (algo como
-    "luid_0x00000000_0x0000abcd_phys_0"), que exponemos en "raw_id" para
-    poder verificar a ojo el orden si algún día hay que depurarlo — Windows
-    no da una forma sencilla de mapear LUID → nombre de tarjeta sin más
-    pasos, así que seguimos emparejando por orden con Vulkan, pero al menos
-    ahora hay un identificador estable que enseñar si algo no cuadra.
+    Lee '\\GPU Adapter Memory(*)\\Dedicated Usage' y '...\\Shared Usage' con
+    Get-Counter — el mismo contador crudo que usa el Administrador de tareas.
+    Cada instancia trae el LUID del adaptador; lo cruzamos con DXGI para
+    saber el NOMBRE y la VRAM dedicada total de cada una, y así emparejar
+    con los dispositivos Vulkan por nombre (ver attach_live_usage) en vez de
+    por posición. Antes se ordenaba por LUID y se asignaba a Vulkan0/1 por
+    orden, lo que en la torre (R9700 + W7700) podía cruzar las lecturas, y
+    se descartaban las tarjetas con uso 0, lo que descuadraba el recuento
+    y hacía caer a la lectura de Vulkan (que no ve otros procesos).
     Solo se intenta en Windows — PowerShell no existe en Linux.
     """
     try:
@@ -188,32 +269,51 @@ def _try_get_counter_vram():
             "$ErrorActionPreference='Stop';"
             "$d=(Get-Counter '\\GPU Adapter Memory(*)\\Dedicated Usage').CounterSamples;"
             "$s=(Get-Counter '\\GPU Adapter Memory(*)\\Shared Usage').CounterSamples;"
-            "$names=$d | Select-Object -ExpandProperty InstanceName | Sort-Object;"
-            "foreach($n in $names){"
-            "  $du=($d | Where-Object {$_.InstanceName -eq $n}).CookedValue;"
-            "  $su=($s | Where-Object {$_.InstanceName -eq $n}).CookedValue;"
-            "  '{0}|{1}|{2}' -f $n,[int64]$du,[int64]$su}"
+            "foreach($x in $d){'D|{0}|{1}' -f $x.InstanceName,[int64]$x.CookedValue};"
+            "foreach($x in $s){'S|{0}|{1}' -f $x.InstanceName,[int64]$x.CookedValue}"
         )
         out = _run(["powershell", "-NoProfile", "-Command", ps_script], timeout=15)
-        results = []
-        for i, line in enumerate(out.stdout.strip().splitlines()):
+        usage = {}  # (high, low) → {"ded": bytes, "shr": bytes, "raw": instancia}
+        for line in out.stdout.strip().splitlines():
             parts = line.strip().split("|")
-            if len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit():
-                ded_mib = int(parts[1]) // (1024**2)
-                shr_mib = int(parts[2]) // (1024**2)
-                if ded_mib == 0 and shr_mib == 0:
-                    # Casi seguro un adaptador virtual/software (Basic Render
-                    # Driver, RDP...) sin uso real — Windows lo expone en
-                    # este mismo contador junto a las GPUs físicas, y si lo
-                    # dejamos entrar descuadra el nº de entradas frente a las
-                    # GPUs reales que ve Vulkan.
+            if len(parts) != 3 or not parts[2].lstrip("-").isdigit():
+                continue
+            m = _LUID_RE.search(parts[1])
+            if not m:
+                continue
+            key = (int(m.group(1), 16), int(m.group(2), 16))
+            u = usage.setdefault(key, {"ded": 0, "shr": 0, "raw": parts[1]})
+            # Varias instancias phys_N con el mismo LUID = adaptador enlazado → se suman
+            u["ded" if parts[0] == "D" else "shr"] += max(int(parts[2]), 0)
+        if not usage:
+            return None
+
+        adapters = _dxgi_adapters()
+        results = []
+        for key in sorted(usage):
+            u = usage[key]
+            a = adapters.get(key)
+            if adapters:
+                # Con DXGI disponible: fuera software y LUIDs desconocidos
+                # (Basic Render Driver, adaptadores de RDP...). Ya NO se filtra
+                # por "uso 0": una GPU secundaria sin nada cargado puede
+                # marcar 0 y es real.
+                if a is None or a["software"]:
                     continue
-                results.append({"gpu_idx": len(results), "total_mib": 0,
-                                 "used_mib": ded_mib + shr_mib,
-                                 "dedicated_mib": ded_mib, "shared_mib": shr_mib,
-                                 "raw_id": parts[0]})
-        if results:
-            return results
+            elif u["ded"] == 0 and u["shr"] == 0:
+                continue  # sin DXGI, mantenemos el filtro antiguo
+            ded_mib = u["ded"] // (1024**2)
+            shr_mib = u["shr"] // (1024**2)
+            results.append({
+                "gpu_idx": len(results),
+                "name": a["name"] if a else None,
+                "total_mib": a["dedicated_total_mib"] if a else 0,
+                "used_mib": ded_mib,          # VRAM real: solo dedicada
+                "dedicated_mib": ded_mib,
+                "shared_mib": shr_mib,        # esto es RAM del sistema, va aparte
+                "raw_id": u["raw"],
+            })
+        return results or None
     except Exception:
         pass
     return None
@@ -294,6 +394,64 @@ def get_vram_usage():
             return result
     SYS["vram_source"] = "ninguna fuente disponible"
     return []
+
+
+def _norm_name(n):
+    n = (n or "").lower()
+    n = re.sub(r"\(r\)|\(tm\)|®|™", "", n)
+    return re.sub(r"[^a-z0-9]+", " ", n).strip()
+
+
+def attach_live_usage(devices):
+    """Añade a cada dispositivo de --list-devices su uso en vivo
+    (used_mib, dedicated_mib, shared_mib, raw_id, vram_live).
+
+    1) Si la fuente trae nombres (Windows + DXGI), se empareja POR NOMBRE;
+       con dos tarjetas idénticas se desempata por el total más parecido y
+       luego por orden.
+    2) Si no hay nombres (rocm-smi, sysfs, nvidia-smi), se mantiene el
+       emparejamiento por posición, solo si el nº de entradas coincide.
+    3) Lo que quede sin pareja cae al "free" de Vulkan (vram_live=False).
+
+    En iGPU (el total de Vulkan incluye memoria compartida, muy por encima de
+    la dedicada que declara DXGI) el uso sí es dedicada + compartida, que es
+    lo que ocupa realmente el heap que Vulkan reporta.
+    """
+    monitor = list(SYS.get("gpus", []))
+    pairs = {}
+    if monitor and any(m.get("name") for m in monitor):
+        free = list(range(len(monitor)))
+        for i, d in enumerate(devices):
+            dn = _norm_name(d.get("name"))
+            cands = [j for j in free
+                     if monitor[j].get("name")
+                     and (_norm_name(monitor[j]["name"]) in dn or dn in _norm_name(monitor[j]["name"]))]
+            if not cands:
+                continue
+            cands.sort(key=lambda j: abs((monitor[j].get("total_mib") or 0) - d.get("total_mib", 0)))
+            pairs[i] = cands[0]
+            free.remove(cands[0])
+    elif monitor and len(monitor) == len(devices):
+        pairs = {i: i for i in range(len(devices))}
+
+    for i, d in enumerate(devices):
+        j = pairs.get(i)
+        if j is None:
+            d["used_mib"] = max(d["total_mib"] - d.get("free_mib", 0), 0)
+            d["vram_live"] = False
+            continue
+        m = monitor[j]
+        used = m["used_mib"]
+        ded_total = m.get("total_mib") or 0
+        if (m.get("shared_mib") is not None and ded_total
+                and d.get("total_mib", 0) > ded_total * 1.5):
+            used = (m.get("dedicated_mib") or 0) + (m.get("shared_mib") or 0)
+        d["used_mib"] = used
+        d["dedicated_mib"] = m.get("dedicated_mib")
+        d["shared_mib"] = m.get("shared_mib")
+        d["raw_id"] = m.get("raw_id")
+        d["vram_live"] = True
+    return devices
 
 
 def update_device_cache(devices):
