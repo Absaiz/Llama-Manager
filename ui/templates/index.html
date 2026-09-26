@@ -1,0 +1,2232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLAMA MANAGER</title>
+<style>
+/* ── Variables ── */
+:root{
+  --bg:#1b1f24;--sidebar:#161a1f;--panel:#23282f;--panel2:#2a3039;--line:#3a414c;
+  --txt:#d7dde6;--dim:#8b94a3;--amber:#f5a623;--amber-dim:#7a5413;
+  --ok:#43d17a;--warn:#f5a623;--bad:#e5534b;
+  --vision:#a78bfa;--tools:#38bdf8;--reasoning:#fb923c;
+  --mono:"Cascadia Code","Consolas",monospace;
+  --sidebar-w:220px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font:14px/1.5 "Segoe UI",system-ui,sans-serif;
+     display:flex;height:100vh;overflow:hidden}
+
+/* ── Sidebar ── */
+#sidebar{
+  width:var(--sidebar-w);min-width:var(--sidebar-w);background:var(--sidebar);
+  border-right:1px solid var(--line);display:flex;flex-direction:column;
+  overflow-y:auto;z-index:10;
+}
+#sidebar-logo{
+  padding:16px 14px 12px;border-bottom:1px solid var(--line);
+  font-family:var(--mono);font-size:13px;font-weight:700;color:var(--amber);
+  letter-spacing:2px;
+}
+#sidebar-logo small{display:block;color:var(--dim);font-size:9px;letter-spacing:1px;margin-top:2px;font-weight:400}
+.nav-section{padding:10px 10px 4px;font-size:9.5px;letter-spacing:2px;color:var(--dim);text-transform:uppercase}
+.nav-item{
+  display:flex;align-items:center;gap:9px;padding:8px 14px;cursor:pointer;
+  border-radius:4px;margin:1px 6px;font-size:13px;color:var(--dim);
+  transition:background .15s,color .15s;
+}
+.nav-item:hover{background:var(--panel2);color:var(--txt)}
+.nav-item.active{background:var(--amber-dim);color:var(--amber);font-weight:600}
+.nav-item .icon{font-size:15px;width:20px;text-align:center;flex-shrink:0}
+.nav-item .badge{margin-left:auto;background:var(--panel2);border-radius:10px;
+  padding:1px 7px;font-size:10px;font-family:var(--mono)}
+.nav-item.active .badge{background:#5a3800}
+#sidebar-footer{margin-top:auto;padding:10px 6px;border-top:1px solid var(--line)}
+
+/* ── Main area ── */
+#main{flex:1;overflow-y:auto;padding:20px 24px}
+
+/* ── Panels ── */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;
+       padding:16px;margin-bottom:18px}
+.panel-page{display:none}
+.panel-page.active{display:block}
+h2{font-size:11px;letter-spacing:2px;color:var(--dim);text-transform:uppercase;
+   border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:14px;
+   display:flex;align-items:center;gap:10px}
+h2 .right{margin-left:auto;display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0}
+
+/* ── GPU bars ── */
+.gpu{display:flex;align-items:center;gap:14px;background:var(--panel2);border:1px solid var(--line);
+     border-radius:4px;padding:9px 14px;margin-bottom:8px;font-family:var(--mono);font-size:13px}
+.gpu .gname{flex:1}.gpu .gid{color:var(--amber);min-width:84px}
+.vrambar{width:180px;height:10px;background:#161a1f;border:1px solid var(--line);border-radius:2px;overflow:hidden}
+.vrambar i{display:block;height:100%;background:linear-gradient(90deg,var(--amber-dim),var(--amber));transition:width .5s}
+.vrambar i.danger{background:linear-gradient(90deg,#8c2f2a,var(--bad))}
+.gpu .mib{color:var(--dim);font-size:11px;min-width:195px;text-align:right}
+
+/* ── Nodos remotos ── */
+.peer-card{border:1px solid var(--line);background:#10141a;border-radius:6px;padding:12px 14px;margin-bottom:12px}
+.peer-card.local{border-color:var(--amber-dim)}
+.peer-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.peer-dot{width:9px;height:9px;border-radius:50%;background:#555;flex-shrink:0}
+.peer-dot.ok{background:var(--ok)}
+.peer-dot.err{background:var(--bad)}
+.peer-hostname{font-weight:600;font-family:var(--mono);font-size:14px}
+.peer-sub{color:var(--dim);font-size:11.5px}
+.peer-tag{margin-left:auto;font-size:10.5px;text-transform:uppercase;letter-spacing:1px;color:var(--amber)}
+.peer-gpu{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid #1b2027}
+.peer-gpu:first-of-type{border-top:none}
+.peer-gpu .gname{flex:1;font-size:13px}
+.peer-mib{color:var(--dim);font-size:11px;min-width:150px;text-align:right;font-family:var(--mono)}
+.peer-instances{margin-top:8px;font-size:12px;color:var(--dim)}
+.peer-instances b{color:var(--txt)}
+.peer-btn{background:none;border:1px solid var(--line);color:var(--dim);border-radius:4px;cursor:pointer;padding:2px 8px;font-size:12px}
+.peer-btn:hover{border-color:var(--bad);color:var(--bad)}
+.peer-err{color:var(--bad);font-size:12.5px;margin-top:8px}
+.peer-ratio{font-family:var(--mono);font-size:11px;color:var(--dim)}
+
+/* ── Forms ── */
+label{display:block;font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin:10px 0 4px}
+select,input[type=text],input[type=number],textarea{
+  width:100%;background:#161a1f;border:1px solid var(--line);color:var(--txt);
+  padding:7px 9px;border-radius:4px;font-family:var(--mono);font-size:13px}
+select:focus,input:focus,textarea:focus{outline:1px solid var(--amber)}
+.row{display:flex;gap:12px}.row>div{flex:1}
+.checks{display:flex;gap:16px;margin-top:12px;font-size:13px;flex-wrap:wrap}
+.checks label{display:flex;align-items:center;gap:6px;margin:0;text-transform:none;letter-spacing:0;color:var(--txt)}
+
+/* ── Buttons ── */
+button{background:var(--amber);color:#1b1f24;border:0;border-radius:4px;padding:9px 18px;
+  font-weight:700;letter-spacing:1px;cursor:pointer;font-size:13px;transition:filter .1s}
+button:hover{filter:brightness(1.1)}
+button:disabled{opacity:.4;cursor:default}
+button.stop{background:transparent;border:1px solid var(--bad);color:var(--bad);padding:4px 10px}
+button.kill{background:var(--bad);color:#fff;padding:4px 10px}
+button.ghost{background:transparent;border:1px solid var(--line);color:var(--dim);padding:4px 12px;font-weight:400}
+button.profile-btn{background:transparent;border:1px solid var(--amber);color:var(--amber);padding:4px 12px;font-weight:600;font-size:12px}
+button.shutdown-btn{background:transparent;border:1px solid var(--bad);color:var(--bad);padding:6px 14px;font-weight:700;font-size:12px}
+button.vision-btn{background:var(--vision);color:#1b1f24;padding:9px 18px;font-weight:700}
+
+/* ── Table ── */
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12.5px}
+td,th{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--dim);font-weight:400;font-size:10.5px;text-transform:uppercase;letter-spacing:1px}
+
+/* ── Status dots ── */
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.dot.ok{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.dot.loading{background:var(--warn);animation:pulse 1s infinite}
+.dot.down{background:var(--bad)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.loadtag{color:var(--warn);font-size:11px;animation:pulse 1s infinite}
+
+/* ── Misc ── */
+.err{color:var(--bad);font-family:var(--mono);font-size:12px;margin-top:8px}
+.muted{color:var(--dim);font-size:11px;font-family:var(--mono)}
+.proxyurl{font-family:var(--mono);font-size:12px;color:var(--ok);background:#161a1f;
+  border:1px solid var(--line);border-radius:4px;padding:8px 12px;margin-top:8px;display:block}
+#alert-bar{display:none;background:#3a1f1d;border:1px solid var(--bad);color:#ffb3ae;
+  border-radius:4px;padding:8px 12px;margin-bottom:10px;font-family:var(--mono);font-size:12px}
+
+/* ── ctx hint badges ── */
+.ctx-hint{font-size:11px;font-family:var(--mono);margin-top:6px;min-height:20px;
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cap-badge{display:inline-flex;align-items:center;gap:3px;border-radius:3px;
+  padding:2px 7px;font-size:10.5px;font-weight:700;letter-spacing:.5px}
+.cap-vision   {background:#2d1f4e;color:var(--vision);border:1px solid var(--vision)}
+.cap-tools    {background:#0c2a38;color:var(--tools);border:1px solid var(--tools)}
+.cap-reasoning{background:#3a1f0a;color:var(--reasoning);border:1px solid var(--reasoning)}
+
+/* ── Chat ── */
+#chatbox{background:#0f1216;border:1px solid var(--line);border-radius:4px;
+  padding:14px;height:340px;overflow-y:auto;font-size:13.5px}
+.msg{margin-bottom:12px;white-space:pre-wrap}
+.msg .who{font-family:var(--mono);font-size:10.5px;letter-spacing:1.5px;
+  color:var(--dim);display:block;margin-bottom:2px}
+.msg.user .who{color:var(--amber)}
+.msg.assistant{border-left:2px solid var(--line);padding-left:10px}
+.chatrow{display:flex;gap:10px;margin-top:12px}
+.chatrow textarea{flex:1;resize:vertical;min-height:44px}
+#stats-bar{display:flex;gap:22px;font-family:var(--mono);font-size:12px;
+  color:var(--dim);margin-top:10px;flex-wrap:wrap}
+#stats-bar b{color:var(--amber);font-size:16px}
+#stats-bar span small{display:block;font-size:10px;letter-spacing:1px;text-transform:uppercase}
+
+/* ── Log ── */
+#logbox{background:#0f1216;border:1px solid var(--line);border-radius:4px;
+  padding:12px;font-family:var(--mono);font-size:11.5px;white-space:pre-wrap;
+  height:400px;overflow:auto;color:#9fb0c3}
+
+/* ── Vision ── */
+#visionDrop{border:2px dashed var(--vision);border-radius:6px;padding:22px;
+  text-align:center;cursor:pointer;color:var(--vision);font-size:13px;
+  margin-bottom:12px;transition:background .2s}
+#visionDrop.dragover{background:#2d1f4e}
+#visionPreview{max-width:100%;max-height:220px;border-radius:4px;margin-bottom:10px;display:none}
+#visionBox{background:#0f1216;border:1px solid var(--line);border-radius:4px;
+  padding:14px;min-height:80px;font-size:13.5px;white-space:pre-wrap}
+
+/* ── Profile bar ── */
+.profile-bar{display:flex;gap:8px;margin-bottom:14px;padding:10px 12px;
+  background:var(--panel2);border:1px solid var(--line);border-radius:4px;align-items:center}
+.profile-bar span{font-size:11px;color:var(--dim);letter-spacing:1px;text-transform:uppercase;margin-right:4px}
+
+/* ── Skills panel ── */
+.skill-card{background:var(--panel2);border:1px solid var(--line);border-radius:4px;
+  padding:10px 14px;margin-bottom:8px;cursor:pointer;transition:border-color .15s}
+.skill-card:hover{border-color:var(--amber)}
+.skill-card h4{font-size:13px;color:var(--txt);margin-bottom:3px}
+.skill-card .skill-meta{font-size:11px;color:var(--dim);font-family:var(--mono)}
+#skillContent{background:#0f1216;border:1px solid var(--line);border-radius:4px;
+  padding:14px;font-family:var(--mono);font-size:12px;white-space:pre-wrap;
+  max-height:500px;overflow-y:auto;color:#9fb0c3;display:none}
+
+/* ── tsrow hidden ── */
+#tsrow{display:none}
+
+/* ── Responsive ── */
+@media(max-width:900px){
+  #sidebar{width:52px;min-width:52px}
+  .nav-item span.nav-label,.nav-section,.nav-item .badge,#sidebar-logo small{display:none}
+  #sidebar-logo{padding:14px 10px;font-size:11px;letter-spacing:1px}
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════ SIDEBAR ══════════════════════════════ -->
+<nav id="sidebar">
+  <div id="sidebar-logo">
+    ⚡ LLAMA<br>
+    <small>MANAGER 2026_09_25_V5.0</small>
+  </div>
+
+  <div class="nav-section">Sistema</div>
+  <div class="nav-item active" onclick="showPage('gpu')" id="nav-gpu">
+    <span class="icon">🖥️</span><span class="nav-label">GPUs &amp; RAM</span>
+    <span class="badge" id="badge-gpu">●</span>
+  </div>
+  <div class="nav-item" onclick="showPage('instances')" id="nav-instances">
+    <span class="icon">🚀</span><span class="nav-label">Instancias</span>
+    <span class="badge" id="badge-inst">0</span>
+  </div>
+  <div class="nav-item" onclick="showPage('proxy')" id="nav-proxy">
+    <span class="icon">🔀</span><span class="nav-label">Proxy / API</span>
+  </div>
+  <div class="nav-item" onclick="showPage('peers')" id="nav-peers">
+    <span class="icon">🌐</span><span class="nav-label">Nodos remotos</span>
+    <span class="badge" id="badge-peers">0</span>
+  </div>
+
+  <div class="nav-section">Modelos</div>
+  <div class="nav-item" onclick="showPage('launch')" id="nav-launch">
+    <span class="icon">▶️</span><span class="nav-label">Lanzar modelo</span>
+  </div>
+  <div class="nav-item" onclick="showPage('vision')" id="nav-vision">
+    <span class="icon">👁️</span><span class="nav-label">Vision</span>
+  </div>
+  <div class="nav-item" onclick="showPage('downloads')" id="nav-downloads">
+    <span class="icon">⬇️</span><span class="nav-label">Descargas HF</span>
+    <span class="badge" id="badge-dl">0</span>
+  </div>
+  <div class="nav-item" onclick="showPage('cloud')" id="nav-cloud">
+    <span class="icon">☁️</span><span class="nav-label">Cloud APIs · probar online</span>
+  </div>
+
+  <div class="nav-section">Herramientas</div>
+  <div class="nav-item" onclick="showPage('chat')" id="nav-chat">
+    <span class="icon">💬</span><span class="nav-label">Chat &amp; Tests</span>
+  </div>
+  <div class="nav-item" onclick="showPage('agent')" id="nav-agent">
+    <span class="icon">🤖</span><span class="nav-label">Test Agente</span>
+  </div>
+  <div class="nav-item" onclick="showPage('skills')" id="nav-skills">
+    <span class="icon">📚</span><span class="nav-label">Skills / Docs</span>
+  </div>
+  <div class="nav-item" onclick="showPage('log')" id="nav-log">
+    <span class="icon">📋</span><span class="nav-label">Log</span>
+  </div>
+
+  <div id="sidebar-footer">
+    <button class="shutdown-btn" style="width:100%" onclick="shutdownPC()">⏻ Apagar</button>
+  </div>
+</nav>
+
+<!-- ══════════════════════════════════ MAIN ═════════════════════════════════ -->
+<div id="main">
+  <div id="alert-bar"></div>
+
+  <!-- ── GPU & RAM ── -->
+  <div id="page-gpu" class="panel-page active">
+    <div class="panel">
+      <h2>GPUs y sistema
+        <span class="right"><button class="kill" onclick="killAll()">KILL ALL llama</button></span>
+      </h2>
+      <div id="gpus"></div>
+      <div id="sysbars"></div>
+    </div>
+
+    <!-- ── Modo esclavo: exponer estas GPUs a un maestro ── -->
+    <div class="panel" style="margin-top:14px">
+      <h2 style="font-size:13px">🌐 Modo esclavo — exponer estas GPUs a otro host (ggml-rpc-server)</h2>
+      <p class="muted" style="margin-top:4px;font-size:12px">
+        Arranca aquí un servidor RPC que comparte las GPUs de ESTE host con un host maestro.
+        En el maestro, rellena «Repartir modelo en red» con la IP de este host y su puerto.
+        Requiere la misma versión de llama.cpp en ambos hosts (builds con -DGGML_RPC=ON).
+      </p>
+      <div class="row" style="margin-top:10px;align-items:end">
+        <div><label>Puerto RPC</label><input type="number" id="rpcport" value="50052"></div>
+        <div style="flex:0"><button onclick="startSlave()">▶ Arrancar esclavo</button></div>
+        <div style="flex:1;display:flex;align-items:center;gap:8px">
+          <span id="slaveState" class="muted" style="font-size:12px"></span>
+          <button class="kill" id="slaveStopBtn" style="display:none" onclick="stopSlave()">STOP</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Instancias activas ── -->
+  <div id="page-instances" class="panel-page">
+    <div class="panel">
+      <h2>Instancias activas</h2>
+      <table>
+        <thead><tr><th></th><th>Puerto</th><th>Modelo / alias</th><th>GPU</th><th>Motor</th><th>Ctx</th><th>Uptime</th><th></th><th></th></tr></thead>
+        <tbody id="instances-tbody"></tbody>
+      </table>
+      <div id="orphans"></div>
+    </div>
+  </div>
+
+  <!-- ── Proxy ── -->
+  <div id="page-proxy" class="panel-page">
+    <div class="panel">
+      <h2>Proxy estable para agentes</h2>
+      <div class="row">
+        <div><label>Instancia destino</label><select id="proxyport"></select></div>
+        <div style="flex:0;align-self:end"><button class="ghost" onclick="setProxy()">APLICAR</button></div>
+      </div>
+      <div class="proxyurl" id="proxyurl">proxy sin destino</div>
+      <div class="proxyurl" id="claudeurl" style="color:var(--amber)">Claude Code: sin destino</div>
+      <p class="muted" style="margin-top:8px">URL verde → OpenAI/Aider. URL ámbar → ANTHROPIC_BASE_URL para Claude Code (sin /v1).</p>
+    </div>
+  </div>
+
+  <!-- ── Lanzar modelo ── -->
+  <div id="page-launch" class="panel-page">
+    <div class="panel">
+      <h2>Lanzar instancia
+        <span class="right">
+          <label style="display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;color:var(--dim);font-size:11px"
+            title="Motor de inferencia: qué build de llama-server se usa para listar GPUs y arrancar instancias nuevas. Vulkan = más compatible; ROCm = build HIP nativa para GPUs AMD, puede rendir distinto según el modelo. Cambiarlo refresca la lista de dispositivos.">
+            Motor
+            <select id="engine" onchange="setEngine()" style="width:auto">
+              <option value="vulkan">Vulkan</option>
+              <option value="rocm">ROCm</option>
+            </select>
+          </label>
+          <span id="verBadge" style="font-size:10.5px;color:var(--dim);margin-left:8px" title="Versión del manager · build de llama.cpp esperado (versions.py) · build instalado del motor activo"></span>
+        </span>
+      </h2>
+
+      <div class="profile-bar">
+        <span>Perfiles</span>
+        <select id="profileSelect" style="width:auto;flex:0 0 170px"></select>
+        <button class="profile-btn" onclick="loadProfile()">📂 Cargar</button>
+        <button class="profile-btn" onclick="saveProfile()">💾 Guardar</button>
+        <button class="profile-btn" style="border-color:var(--bad);color:var(--bad)" onclick="deleteProfile()">🗑 Borrar</button>
+        <button class="profile-btn" id="defaultProfileBtn" onclick="toggleDefaultProfile()"
+          title="Marca este perfil para que se cargue solo al iniciar Llama Manager (incluye el modelo).">☆ Marcar predeterminado</button>
+        <input type="text" id="newProfileName" placeholder="nombre nuevo perfil…" style="width:auto;flex:0 0 170px">
+        <button class="profile-btn" onclick="saveProfileAsNew()">💾 Guardar como…</button>
+        <span id="profileStatus" style="color:var(--ok);font-size:11px;margin-left:6px"></span>
+      </div>
+
+      <label>Modelo (<span id="mcount">0</span> GGUF en <span id="mdir"></span>)
+        <button class="ghost" type="button" style="float:right;padding:2px 10px;font-size:11px" onclick="openModelManager()" title="Ver todos los modelos descargados y borrarlos del disco">🗑 Gestionar modelos</button>
+      </label>
+      <select id="model" onchange="scheduleEstimate()"></select>
+      <div class="ctx-hint" id="ctxHint"></div>
+
+      <div class="row">
+        <div style="flex:1;min-width:220px"><label>GPU(s) — marca las que quieras usar (el orden de marcado = orden de reparto)</label><div id="devchk" class="devchk"></div></div>
+        <div><label>Puerto</label><input type="number" id="port" value="1234"></div>
+        <div><label>Alias</label><input type="text" id="alias" placeholder="ej. HouseIA"></div>
+      </div>
+      <div class="row">
+        <div><label>Contexto (ej: 32K, 180K)</label><input type="text" id="ctx" value="32K" oninput="scheduleEstimate()"></div>
+        <div><label>Capas GPU (-ngl)</label><input type="number" id="ngl" value="999" min="0" oninput="scheduleEstimate()"></div>
+        <div id="tsrow"><label>Tensor split (-ts)</label><input type="text" id="ts" placeholder="ej. 16,24"></div>
+      </div>
+      <div class="row">
+        <div><label>Batch (-b)</label><input type="number" id="batch" value="2048" step="256"></div>
+        <div><label>uBatch (-ub)</label><input type="number" id="ubatch" value="512" step="128"></div>
+        <div><label>Parallel</label><input type="number" id="parallel" value="1" min="1" max="8"></div>
+      </div>
+      <div class="row">
+        <div><label>Threads CPU</label><input type="text" id="threads" placeholder="auto"></div>
+        <div><label>Seed</label><input type="text" id="seed" placeholder="random"></div>
+        <div><label>Capas MoE a CPU</label>
+          <div style="display:flex;gap:6px">
+            <input type="number" id="ncpumoe" value="0" min="0" oninput="scheduleEstimate()" style="flex:1">
+            <button class="ghost" type="button" onclick="autosplit()" title="Calcula ngl/ncpumoe/tensor-split automáticamente según VRAM/RAM libres">⚙ Auto</button>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div><label>K cache</label><select id="ctk" onchange="scheduleEstimate()"><option>f16</option><option>q8_0</option><option>q4_0</option></select></div>
+        <div><label>V cache</label><select id="ctv" onchange="scheduleEstimate()"><option>f16</option><option>q8_0</option><option>q4_0</option></select></div>
+        <div></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div style="flex:1">
+          <label title="--rpc: reparte el modelo entre este host (maestro, con su propia GPU) y uno o varios esclavos remotos que corren ggml-rpc-server. Con el check activo NO se pasa --device ni -ts: llama.cpp reparte entre todas las GPUs locales + las remotas. Formato: ip:puerto — separa varios por comas. El otro host debe tener 'Arrancar esclavo' activo y la MISMA versión de llama.cpp." style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="rpc_on" onchange="rpcToggle()"> 🌐 Repartir modelo en red (maestro, --rpc)</label>
+          <input type="text" id="rpc" disabled placeholder="ej. 192.168.0.51:50052   ·   o  10.0.0.2:50052,10.0.0.3:50052">
+        </div>
+      </div>
+      <div class="checks">
+        <label><input type="checkbox" id="fa" checked> Flash Attention</label>
+        <label title="--load-mode (sustituye a --mmap/--no-mmap/--mlock, eliminados en llama.cpp b11xxx). auto = mmap salvo que un dispositivo no lo soporte · none = sin mmap (antes --no-mmap) · mlock = fija en RAM · dio = DirectIO">Carga
+          <select id="load_mode" style="width:auto">
+            <option value="auto">auto (mmap)</option><option value="none">none (sin mmap)</option>
+            <option value="mmap">mmap</option><option value="mlock">mlock</option>
+            <option value="mmap+mlock">mmap+mlock</option><option value="dio">DirectIO</option>
+          </select></label>
+        <label title="--lazy-mode: lee bajo demanda tensores enormes como la tabla PLE (per_layer_token_embd) de Qwen4/Flash-Next en vez de tenerlos residentes. on requiere mmap. auto = solo tensores > 4 GiB">Lazy
+          <select id="lazy_mode" style="width:auto">
+            <option value="">(defecto)</option><option value="auto">auto</option><option value="on">on</option><option value="off">off</option>
+          </select></label>
+      </div>
+
+      <fieldset style="border:1px solid var(--line);border-radius:4px;padding:12px;margin-top:16px;background:var(--panel2)">
+        <legend style="font-size:10.5px;letter-spacing:2px;color:var(--amber);text-transform:uppercase;padding:0 8px">Ajuste fino agentes</legend>
+        <div class="row">
+          <div><label>Máx. salida</label><input type="text" id="npredict" placeholder="∞"></div>
+          <div><label>Temperatura</label><input type="text" id="temp" placeholder="0.8"></div>
+          <div><label>Top-P</label><input type="text" id="topp" placeholder="0.95"></div>
+          <div><label>Top-K</label><input type="text" id="topk" placeholder="40"></div>
+        </div>
+        <div class="row">
+          <div><label>Min-P</label><input type="text" id="minp" placeholder="0.05"></div>
+          <div><label>Repet. pen.</label><input type="text" id="repp" placeholder="1.0"></div>
+          <div><label>Presence</label><input type="text" id="presp" placeholder="0.0"></div>
+          <div><label>Frequency</label><input type="text" id="freqp" placeholder="0.0"></div>
+        </div>
+        <div class="row" style="margin-top:10px;align-items:center">
+          <div><label title="--reasoning on|off|auto (sustituye a enable_thinking por --chat-template-kwargs, obsoleto)">Razonamiento</label>
+            <select id="reasoning"><option value="auto">auto</option><option value="on">on</option><option value="off">off</option></select>
+          </div>
+          <div><label title="--reasoning-effort">Esfuerzo</label>
+            <select id="effort"><option value="auto">auto</option><option value="minimal">minimal</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option><option value="xhigh">xhigh</option><option value="max">max</option></select>
+          </div>
+          <div><label title="--reasoning-preserve: conserva el razonamiento de turnos anteriores en el historial (por defecto ACTIVADO desde b11xxx; gasta más tokens de contexto)">Preservar razonam.</label>
+            <select id="reasoning_preserve"><option value="">(defecto)</option><option value="on">on</option><option value="off">off</option></select>
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;margin:0;text-transform:none;letter-spacing:0;color:var(--txt);font-size:13px">
+            <input type="checkbox" id="ccmode" onchange="ccModeToggle()"> ⚡ Claude Code mode
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset style="border:1px solid var(--line);border-radius:4px;padding:12px;margin-top:16px;background:var(--panel2)">
+        <legend style="font-size:10.5px;letter-spacing:2px;color:var(--amber);text-transform:uppercase;padding:0 8px">Flags avanzados</legend>
+        <div class="row" style="align-items:flex-end">
+          <div style="flex:2"><label title="Qwen4 = arquitectura qwen4exp de llama.cpp (Qwen3.8-Flash-Next). Rellena: PLE en CPU, lazy auto, MTP sidecar auto (n-max 3), caché de prompts con checkpoints, muestreo recomendado.">Qwen4 / Flash-Next (qwen4exp) <span id="archHint" style="color:var(--dim);text-transform:none;letter-spacing:0"></span></label>
+            <button class="ghost" type="button" onclick="applyQwen4()">⚡ Aplicar ajustes Qwen4</button></div>
+          <label style="display:flex;align-items:center;gap:6px;margin:0;text-transform:none;letter-spacing:0;color:var(--txt);font-size:13px" title="-ot per_layer_token_embd=CPU: la tabla PLE de Qwen4 (varios GB) se queda en RAM; solo se leen filas por token. Libera VRAM para contexto.">
+            <input type="checkbox" id="ple_cpu"> PLE en CPU</label>
+          <label style="display:flex;align-items:center;gap:6px;margin:0;text-transform:none;letter-spacing:0;color:var(--txt);font-size:13px" title="--backend-sampling: el muestreo se hace en la GPU. Con MTP la CPU pesa mucho en la velocidad; esto lo mitiga.">
+            <input type="checkbox" id="backend_sampling"> Backend sampling</label>
+        </div>
+        <div class="row">
+          <div style="flex:3"><label title="Modelo draft/sidecar para speculative decoding (-md). 'auto' = busca mtp-*.gguf junto al modelo (así publica Qwen el MTP de Flash-Next). Vacío = MTP embebido del propio GGUF (Qwen3.x -MTP).">Draft / MTP sidecar (-md)</label>
+            <input type="text" id="spec_draft" placeholder="vacío = embebido · auto = mtp-*.gguf de la carpeta"></div>
+          <div><label title="--spec-draft-n-max: tokens a proponer por paso (defecto 3)">Draft n-max</label><input type="text" id="spec_n_max" placeholder="3"></div>
+        </div>
+        <div class="row">
+          <div><label title="--cache-ram MiB: caché de prompts en RAM (defecto 8192, -1 sin límite, 0 desactiva)">Cache RAM (MiB)</label><input type="text" id="cache_ram" placeholder="8192"></div>
+          <div><label title="--ctx-checkpoints N: checkpoints de contexto por slot. En modelos híbridos/recurrentes (Qwen3.5/3.8-Next/Qwen4) es lo que permite reutilizar el prompt entre turnos (defecto 32)">Ctx checkpoints</label><input type="text" id="ctx_ckpt" placeholder="32"></div>
+          <div><label title="--image-min-tokens (solo con mmproj). Qwen-VL pide 1024 para grounding">Img min tokens</label><input type="text" id="image_min_tokens" placeholder="modelo"></div>
+          <div style="flex:2"><label title="-ot patrón=buffer, separados por coma. Se fusiona con 'PLE en CPU'">Override tensor (-ot)</label><input type="text" id="ot" placeholder="ej. exps=CPU"></div>
+        </div>
+        <div class="checks">
+          <label title="--no-webui: desactiva la interfaz web integrada de llama-server (por defecto viene activada). Actívalo si solo vas a usar la API/proxy y quieres ahorrar recursos.">
+            <input type="checkbox" id="no_webui"> Sin WebUI
+          </label>
+          <label title="-fit off (--fit off): desactiva el auto-ajuste de argumentos no especificados (ctx, ngl, batch...) para caber en la memoria del dispositivo. Por defecto llama-server lo hace solo ('on'); actívalo si prefieres controlar tú mismo esos valores sin que el servidor los recalcule.">
+            <input type="checkbox" id="fit_off"> --fit off
+          </label>
+          <label title="--spec-type draft-mtp: decodificación especulativa con Multi-Token Prediction. Qwen3.x -MTP lo trae embebido; Qwen4/Flash-Next lo publica aparte como mtp-*.gguf (pon 'auto' en Draft / MTP sidecar). Si el modelo no tiene MTP, el arranque fallará.">
+            <input type="checkbox" id="spec_mtp"> Speculative MTP
+          </label>
+        </div>
+
+        <div style="margin-top:12px">
+          <label style="display:flex;align-items:center;gap:6px;margin:0;text-transform:none;letter-spacing:0;color:var(--txt);font-size:13px"
+            title="--chat-template-file: sustituye la plantilla de chat (Jinja) que trae el modelo por un fichero .jinja propio. Útil cuando la plantilla embebida del modelo no formatea bien las herramientas (tool-calling) para Claude Code / clientes OpenAI.">
+            <input type="checkbox" id="use_ctf" onchange="toggleCtf()"> Chat template personalizado (--chat-template-file)
+          </label>
+          <div id="ctfRow" style="display:none;margin-top:6px">
+            <input type="text" id="ctf_path" placeholder="ruta al .jinja">
+          </div>
+        </div>
+
+        <div style="margin-top:12px">
+          <label style="display:flex;align-items:center;gap:6px;margin:0;text-transform:none;letter-spacing:0;color:var(--txt);font-size:13px"
+            title="DRY (Don't Repeat Yourself): penaliza la repetición literal de secuencias de tokens ya generadas — más eficaz que repeat-penalty contra bucles largos en salidas extensas. Multiplier = fuerza de la penalización (0 = desactivado). Base = crecimiento exponencial de la penalización según la longitud repetida. Allowed length = nº de tokens repetidos tolerados antes de penalizar. Penalty last N = ventana de tokens recientes analizada.">
+            <input type="checkbox" id="dry" onchange="toggleDry()"> DRY anti-repetición
+          </label>
+          <div id="dryRow" class="row" style="display:none;margin-top:6px">
+            <div><label style="margin-top:0" title="Fuerza de la penalización DRY. 0 = desactivado. Recomendado: 0.8">Multiplier</label><input type="text" id="dry_multiplier" placeholder="0.8"></div>
+            <div><label style="margin-top:0" title="Base del crecimiento exponencial según la longitud de la repetición. Recomendado: 1.75">Base</label><input type="text" id="dry_base" placeholder="1.75"></div>
+            <div><label style="margin-top:0" title="Longitud mínima de una repetición tolerada antes de penalizarla. Recomendado: 2">Allowed length</label><input type="text" id="dry_allowed_length" placeholder="2"></div>
+            <div><label style="margin-top:0" title="Ventana de los últimos N tokens analizada para detectar repeticiones. Recomendado: 1024">Penalty last N</label><input type="text" id="dry_penalty_last_n" placeholder="1024"></div>
+          </div>
+        </div>
+      </fieldset>
+
+      <label>Flags extra</label>
+      <input type="text" id="extra" placeholder="">
+
+      <label>mmproj (proyector multimodal, opcional)</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="mmproj" placeholder="vacío = sin visión" style="flex:1">
+        <button class="ghost" onclick="pickMmproj()">📂 buscar</button>
+        <button class="ghost" onclick="g('mmproj').value='';updateMmprojHint()">✕</button>
+      </div>
+      <div id="mmprojHint" style="font-size:11px;font-family:var(--mono);color:var(--dim);margin-top:3px;min-height:14px"></div>
+
+      <div style="margin-top:14px;display:flex;align-items:center;gap:14px">
+        <button onclick="start()">ARRANCAR</button>
+        <span class="loadtag" id="loading" style="display:none">▮▮▮ cargando modelo</span>
+      </div>
+      <div id="estimate" class="muted" style="margin-top:10px;font-size:12.5px"></div>
+      <div class="err" id="err"></div>
+    </div>
+  </div>
+
+  <!-- ── Vision ── -->
+  <div id="page-vision" class="panel-page">
+    <div class="panel">
+      <h2>👁 Vision — prueba multimodal
+        <span class="right"><select id="visionport" style="width:auto"></select></span>
+      </h2>
+      <div id="visionDrop" onclick="g('visionFile').click()"
+           ondragover="event.preventDefault();this.classList.add('dragover')"
+           ondragleave="this.classList.remove('dragover')"
+           ondrop="onImgDrop(event)">
+        📎 Haz clic o arrastra una imagen (PNG / JPG / WEBP)
+        <input type="file" id="visionFile" accept="image/*" style="display:none" onchange="onImgSelect(event)">
+      </div>
+      <img id="visionPreview">
+      <div class="row" style="margin-bottom:10px">
+        <div style="flex:3">
+          <label>Prompt</label>
+          <textarea id="visionPrompt" rows="2" placeholder="Describe la imagen. / ¿Qué ves?"></textarea>
+        </div>
+        <div style="flex:0 0 120px"><label>Máx. salida</label><input type="number" id="visionMax" placeholder="∞"></div>
+        <div style="flex:0 0 auto;align-self:end"><button class="vision-btn" onclick="sendVision()">ENVIAR</button></div>
+      </div>
+      <div id="visionBox"><span style="color:var(--dim)">La respuesta aparecerá aquí…</span></div>
+      <div id="visionStats" style="font-family:var(--mono);font-size:12px;color:var(--dim);margin-top:8px"></div>
+    </div>
+  </div>
+
+  <!-- ── Descargas Hugging Face ── -->
+  <div id="page-downloads" class="panel-page">
+    <div class="panel">
+      <h2>⬇️ Descargar modelos · Hugging Face
+        <span class="right"><span class="muted" id="hfDest"></span></span>
+      </h2>
+      <div class="row" style="align-items:end">
+        <div style="flex:3"><label>Buscar repos GGUF</label><input type="text" id="hfQuery" placeholder="ej. qwen3 27b" onkeydown="if(event.key==='Enter')hfSearch()"></div>
+        <div style="flex:0 0 auto"><button onclick="hfSearch()">🔎 BUSCAR</button></div>
+      </div>
+      <div id="hfSearchResults" style="margin-top:12px"></div>
+      <div id="hfFiles" style="display:none;margin-top:14px">
+        <div style="font-family:var(--mono);font-size:12px;color:var(--amber);margin-bottom:8px" id="hfFilesTitle"></div>
+        <div id="hfFilesList"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Descargas en curso / recientes</h2>
+      <div id="hfDlList"><p class="muted">Sin descargas.</p></div>
+    </div>
+  </div>
+
+  <!-- ── Cloud APIs · probar modelos online ── -->
+  <div id="page-cloud" class="panel-page">
+    <div class="panel">
+      <h2>☁️ Probar modelos ONLINE (APIs OpenAI-compatibles)
+        <span class="right"><span class="muted" id="cloudKeyState"></span></span>
+      </h2>
+      <p class="muted" style="margin-bottom:14px">
+        Prueba proveedores en la nube (OpenRouter, Groq, Mistral…) o cualquier endpoint OpenAI-compatible — incluso un Ollama/llama-server de otro equipo — antes de decidir si comprar más hardware. La clave NO se guarda a disco; vive mientras corra este proceso.
+      </p>
+      <div class="row" style="align-items:end">
+        <div style="flex:2"><label>Proveedor</label><select id="cloudProvider"></select></div>
+        <div style="flex:3"><label>URL base (OpenAI-compat, termina en /v1)</label><input type="text" id="cloudUrl" placeholder="https://openrouter.ai/api/v1" onkeydown="if(event.key==='Enter')cloudSaveKey()"></div>
+        <div style="flex:0 0 auto"><button class="ghost" onclick="g('cloudProvider').value='custom'">✏️ personal</button></div>
+      </div>
+      <div class="row" style="align-items:end;margin-top:4px">
+        <div><label>API key (vacía = sin clave / borrar guardada)</label><input type="password" id="cloudKey" placeholder="sk-…" onkeydown="if(event.key==='Enter')cloudSaveKey()"></div>
+        <div style="flex:0 0 auto"><button onclick="cloudSaveKey()">💾 GUARDAR CLAVE</button></div>
+      </div>
+      <div id="cloudModelsWrap" style="display:none;margin-top:4px">
+        <label>Modelos disponibles (<span id="cloudMCount">0</span>)</label>
+        <select id="cloudModels"></select>
+        <button class="ghost" type="button" onclick="cloudLoadModels()" title="Volver a listar modelos de la API">⟳ re-listar</button>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button onclick="cloudLoadModels()">🔎 CARGAR MODELOS DE LA API</button>
+        <span id="cloudStatus" class="muted"></span>
+      </div>
+
+      <h2 style="margin-top:18px">Chat de prueba (streaming)</h2>
+      <div id="cloudBox" style="background:#0f1216;border:1px solid var(--line);border-radius:4px;padding:14px;height:320px;overflow-y:auto;font-size:13.5px">
+        <span class="muted">(seleciona un modelo y escribe abajo)</span>
+      </div>
+      <div style="display:flex;gap:22px;font-family:var(--mono);font-size:12px;color:var(--dim);margin-top:10px">
+        <span><small>t. primera</small><b id="cloudTtft" style="color:var(--amber)">—</b></span>
+        <span><small>gen aprox.</small><b id="cloudGen" style="color:var(--amber)">—</b> t/s</span>
+        <span><small>tiempo total</small><b id="cloudTotal" style="color:var(--amber)">—</b> s</span>
+      </div>
+      <div class="chatrow">
+        <textarea id="cloudPrompt" placeholder="Escribe un prompt… Ctrl+Enter para enviar"></textarea>
+        <button id="cloudSendBtn" onclick="cloudChat()" style="align-self:end">ENVIAR</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Chat & Tests ── -->
+  <div id="page-chat" class="panel-page">
+    <div class="panel">
+      <h2>Chat &amp; Tests
+        <span class="right">
+          <select id="chatport" style="width:auto"></select>
+          <button class="ghost" onclick="bench()">⏱ VELOCIDAD</button>
+          <button class="ghost" onclick="codeTest()">🧪 TEST CÓDIGO</button>
+          <button class="ghost" onclick="ccTest()">⚡ TEST CC</button>
+          <button class="ghost" onclick="clearChat()">limpiar</button>
+        </span>
+      </h2>
+
+      <!-- Selector de skill para el test de código -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;background:var(--panel2);padding:8px 12px;border-radius:4px;border:1px solid var(--line)">
+        <span style="font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1px">Skill TEST CÓDIGO</span>
+        <select id="codeSkill" style="flex:1;width:auto">
+          <option value="">Sin skill (prompt directo)</option>
+        </select>
+        <span id="skillLoadedBadge" style="display:none;font-size:11px;font-family:var(--mono);color:var(--ok)">✓ cargado</span>
+      </div>
+
+      <div id="chatbox"></div>
+      <div id="stats-bar">
+        <span><small>prompt</small><b id="s_pp">—</b> t/s</span>
+        <span><small>generación</small><b id="s_tg">—</b> t/s</span>
+        <span><small>tokens prompt</small><b id="s_pn">—</b></span>
+        <span><small>tokens gen</small><b id="s_tn">—</b></span>
+        <span><small>tiempo total</small><b id="s_tt">—</b> s</span>
+      </div>
+      <div class="chatrow">
+        <textarea id="prompt" placeholder="Ctrl+Enter para enviar..."></textarea>
+        <div style="flex:0 0 120px"><label style="margin-top:0">Máx. salida</label><input type="number" id="chatmax" placeholder="∞"></div>
+        <button id="sendbtn" onclick="send()" style="align-self:end">ENVIAR</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Test Agente ── -->
+  <div id="page-agent" class="panel-page">
+    <div class="panel">
+      <h2>🤖 Test de Agente — Tool Use Real
+        <span class="right"><select id="agentport" style="width:auto"></select></span>
+      </h2>
+
+      <!-- Tarea -->
+      <label>Tarea</label>
+      <textarea id="agentTask" rows="4" style="margin-bottom:10px"
+        placeholder="Describe la tarea para el agente..."></textarea>
+
+      <!-- Config -->
+      <div class="row" style="margin-bottom:12px">
+        <div style="flex:0 0 140px">
+          <label>Máx. turnos</label>
+          <input type="number" id="agentMaxTurns" value="10" min="1" max="30">
+        </div>
+        <div style="flex:1;align-self:end;display:flex;gap:8px">
+          <button onclick="runAgentTest()" id="agentBtn">▶ EJECUTAR</button>
+          <button class="ghost" onclick="loadDefaultTask()">📋 Tarea por defecto</button>
+          <button class="ghost" onclick="clearAgent()">limpiar</button>
+        </div>
+      </div>
+
+      <!-- Tools disponibles -->
+      <div id="agentToolsBadges" style="margin-bottom:14px;display:flex;gap:6px;flex-wrap:wrap"></div>
+
+      <!-- Log de ejecución -->
+      <div id="agentLog" style="background:#0f1216;border:1px solid var(--line);border-radius:4px;
+        padding:14px;min-height:200px;max-height:480px;overflow-y:auto;
+        font-family:var(--mono);font-size:12.5px;white-space:pre-wrap"></div>
+
+      <!-- Resultado final -->
+      <div id="agentResult" style="display:none;margin-top:14px;padding:14px;
+        border-radius:4px;font-family:var(--mono);font-size:13px"></div>
+
+      <!-- Métricas -->
+      <div id="agentMetrics" style="display:none;margin-top:10px;display:none">
+        <div style="display:flex;gap:18px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;color:var(--dim)">
+          <span>Turnos: <b id="m-turns" style="color:var(--amber)">—</b></span>
+          <span>Tiempo: <b id="m-time" style="color:var(--amber)">—</b> s</span>
+          <span>Tools usadas: <b id="m-tools" style="color:var(--amber)">—</b></span>
+          <span>Inventadas: <b id="m-invented" style="color:var(--bad)">—</b></span>
+          <span>Resultado: <b id="m-success" style="color:var(--ok)">—</b></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Skills / Docs ── -->
+  <div id="page-skills" class="panel-page">
+    <div class="panel">
+      <h2>Skills &amp; Documentación</h2>
+      <p class="muted" style="margin-bottom:14px">
+        Los skills son ficheros .md en la carpeta <code>skills/</code>.
+        Al hacer TEST CÓDIGO con un skill activo, su contenido se inyecta en el prompt como referencia de APIs.
+      </p>
+      <div id="skillsList"></div>
+      <div style="margin-top:14px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:12px;color:var(--dim)">Vista previa:</span>
+        <button class="ghost" onclick="g('skillContent').style.display='none'">ocultar</button>
+      </div>
+      <pre id="skillContent"></pre>
+    </div>
+  </div>
+
+  <!-- ── Log ── -->
+  <div id="page-log" class="panel-page">
+    <div class="panel">
+      <h2>Log
+        <span class="right">
+          <select id="logport" style="width:auto" onchange="loadLog()"></select>
+          <label style="display:flex;gap:5px;align-items:center;color:var(--dim);font-size:11px;margin:0">
+            <input type="checkbox" id="logfollow" checked> seguir
+          </label>
+        </span>
+      </h2>
+      <div id="logbox">(selecciona una instancia)</div>
+    </div>
+  </div>
+
+  <!-- ── Nodos remotos ── -->
+  <div id="page-peers" class="panel-page">
+    <div class="panel">
+      <h2>Nodos remotos</h2>
+      <p class="muted" style="margin-bottom:14px">
+        Pone la IP de otro <b>llama_manager</b> y verás aquí sus GPUs, la VRAM
+        libre y qué modelos están corriendo. Se guarda solo (no hay que volver a
+        escribirlo) y se refresca cada 5&nbsp;s mientras tengas esta pestaña abierta.
+      </p>
+
+      <!-- Añadir nodo -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+        <input type="text" id="peerInput" placeholder="192.168.0.57 o 192.168.0.57:8081"
+          style="flex:1;min-width:220px" onkeydown="if(event.key==='Enter')addPeer()">
+        <button onclick="addPeer()">➕ Añadir nodo</button>
+      </div>
+
+      <!-- Estado de este equipo (referencia local) -->
+      <div id="peersLocalCard" class="peer-card"></div>
+
+      <!-- Nodos remotos -->
+      <div id="peersList" style="display:flex;flex-direction:column;gap:12px"></div>
+    </div>
+  </div>
+
+</div><!-- /#main -->
+
+<script>
+// ══════════════════════════════════════════════════════════════════════════
+//  LLAMA MANAGER — UI JS (versión: versions.py → /api/state.versions)
+// ══════════════════════════════════════════════════════════════════════════
+let STATE=null, chatHistory=[], busy=false;
+let visionB64="", visionType="image/jpeg";
+let currentCaps=[];
+let loadedSkillContent="";  // contenido del skill activo para inyectar en el test
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+const g = id => document.getElementById(id);
+const fmtUp = s => { const h=Math.floor(s/3600),m=Math.floor(s%3600/60); return h?h+"h"+m+"m":m+"m"+(s%60)+"s"; };
+const fmtK  = n => (!n && n!==0) ? "?" : (n>=1024 ? Math.round(n/1024)+"K" : String(n));
+
+function parseCtx(v){
+  v=String(v||"").trim().toUpperCase();
+  if(v.endsWith("K")) return Math.round(parseFloat(v)*1024);
+  return parseInt(v)||32768;
+}
+
+function bar(pct, danger){
+  return `<div class="vrambar"><i class="${danger?'danger':''}" style="width:${Math.min(100,pct)}%"></i></div>`;
+}
+
+function fillPortSelect(sel, instances, keepEmpty=false){
+  const cur=sel.value;
+  let html=instances.map(i=>`<option value="${i.port}">:${i.port} — ${(i.alias||i.model).slice(0,28)}</option>`).join("");
+  if(!html) html=`<option value="">(sin instancias)</option>`;
+  else if(keepEmpty) html=`<option value="">(ninguna)</option>`+html;
+  sel.innerHTML=html;
+  if([...sel.options].some(o=>o.value===cur)) sel.value=cur;
+}
+
+// ── Navegación sidebar ────────────────────────────────────────────────────
+function showPage(id){
+  document.querySelectorAll(".panel-page").forEach(p=>p.classList.remove("active"));
+  document.querySelectorAll(".nav-item").forEach(n=>n.classList.remove("active"));
+  g(`page-${id}`)?.classList.add("active");
+  g(`nav-${id}`)?.classList.add("active");
+  if(id==="skills") loadSkills();
+  if(id==="log")    loadLog();
+  if(id==="peers")  loadPeers();
+}
+
+// ── ctx helpers ───────────────────────────────────────────────────────────
+function selDeviceIds(){return [...g("devchk").querySelectorAll("input:checked")].map(i=>i.dataset.id);}
+function rpcOn(){return !!(g("rpc_on")&&g("rpc_on").checked);}
+function tsVisibility(){
+  // Con RPC activo no hay --device ni -ts: ocultar el tensor-split.
+  g("tsrow").style.display=(!rpcOn()&&selDeviceIds().length>1)?"block":"none";
+}
+// Check "Repartir modelo en red": habilita la lista de esclavos y bloquea la
+// selección de GPUs (no se enviará --device; llama.cpp reparte local + RPC).
+function rpcToggle(){
+  const on=rpcOn();
+  g("rpc").disabled=!on;
+  const ds=g("devchk");
+  ds.style.opacity=on?"0.45":"";
+  ds.title=on?"Modo red activo: no se pasa --device, llama.cpp usa todas las GPUs locales + esclavos RPC":"";
+  ds.querySelectorAll("input,button").forEach(el=>el.disabled=on);
+  tsVisibility(); scheduleEstimate();
+}
+function ccModeToggle(){
+  if(!g("ccmode").checked) return;
+  g("temp").value="0.6"; g("topp").value="0.95"; g("topk").value="20"; g("repp").value="1.05";
+  if(parseCtx(g("ctx").value)<32768) g("ctx").value="32K";
+  scheduleEstimate();
+}
+
+// ── readCfg / applyCfg ────────────────────────────────────────────────────
+// Vulkan no garantiza que "Vulkan0"/"Vulkan1" sigan siendo la misma tarjeta
+// física entre arranques (el orden de --list-devices puede cambiar con el
+// driver, el monitor conectado, etc.). Guardamos también el NOMBRE de cada
+// GPU seleccionada para poder re-identificarla al cargar un perfil, en vez
+// de fiarnos ciegamente del id "VulkanN" guardado.
+function currentDeviceNames(){
+  const ids=selDeviceIds();
+  if(!STATE) return [];
+  return ids.map(id=>{
+    const d=(STATE.devices||[]).find(x=>x.id===id);
+    return d?d.name:null;
+  });
+}
+function resolveDeviceIds(names){
+  if(!names || !names.length || !STATE) return null;
+  const pool=[...(STATE.devices||[])];
+  const resolved=[];
+  for(const nm of names){
+    const idx=pool.findIndex(d=>d.name===nm);
+    if(idx<0) return null;      // no identificable por nombre — que decida el llamador
+    resolved.push(pool[idx].id);
+    pool.splice(idx,1);         // no reutilizar la misma GPU si hay nombres repetidos
+  }
+  return resolved.join(",");
+}
+function readCfg(){
+  const v=id=>g(id).value, chk=id=>g(id).checked;
+  return{
+    model:v("model"),device:selDeviceIds().join(","),deviceNames:currentDeviceNames(),
+    port:+v("port"),alias:v("alias"),engine:v("engine"),
+    ctx:parseCtx(v("ctx")),ngl:+v("ngl"),ts:v("ts"),
+    batch:+v("batch"),ubatch:+v("ubatch"),parallel:+v("parallel"),
+    threads:v("threads"),seed:v("seed"),ncpumoe:+v("ncpumoe"),
+    ctk:v("ctk"),ctv:v("ctv"),fa:chk("fa"),load_mode:v("load_mode"),lazy_mode:v("lazy_mode"),
+    npredict:v("npredict"),temp:v("temp"),topp:v("topp"),topk:v("topk"),
+    minp:v("minp"),repp:v("repp"),presp:v("presp"),freqp:v("freqp"),
+    reasoning:v("reasoning"),thinking:v("reasoning")!=="off",effort:v("effort"),
+    reasoning_preserve:v("reasoning_preserve"),extra:v("extra"),mmproj:v("mmproj"),
+    ple_cpu:chk("ple_cpu"),backend_sampling:chk("backend_sampling"),ot:v("ot"),
+    spec_draft:v("spec_draft").trim(),spec_n_max:v("spec_n_max"),cache_ram:v("cache_ram"),
+    ctx_ckpt:v("ctx_ckpt"),image_min_tokens:v("image_min_tokens"),
+    rpc_on:chk("rpc_on"),rpc:(v("rpc")||"").trim(),
+    no_webui:chk("no_webui"),fit_off:chk("fit_off"),spec_mtp:chk("spec_mtp"),
+    use_ctf:chk("use_ctf"),ctf_path:v("ctf_path"),
+    dry:chk("dry"),dry_multiplier:v("dry_multiplier"),dry_base:v("dry_base"),
+    dry_allowed_length:v("dry_allowed_length"),dry_penalty_last_n:v("dry_penalty_last_n"),
+  };
+}
+function applyCfg(p){
+  if(!p) return;
+  const set=(id,v,d)=>{g(id).value=v??d};
+  const chk=(id,v,d)=>{g(id).checked=v??d};
+  set("ctx",p.ctx?fmtK(p.ctx):"32K","32K");
+  set("ngl",p.ngl,999); set("ts",p.ts,""); set("alias",p.alias,"");
+  set("batch",p.batch,2048); set("ubatch",p.ubatch,512); set("parallel",p.parallel,1);
+  set("threads",p.threads,""); set("seed",p.seed,""); set("ncpumoe",p.ncpumoe,0);
+  set("ctk",p.ctk,"f16"); set("ctv",p.ctv,"f16");
+  set("extra",p.extra,""); set("npredict",p.npredict,""); set("temp",p.temp,"");
+  set("topp",p.topp,""); set("topk",p.topk,""); set("minp",p.minp,"");
+  set("repp",p.repp,""); set("presp",p.presp,""); set("freqp",p.freqp,"");
+  set("effort",p.effort,"auto"); set("mmproj",p.mmproj||"",""); set("rpc",p.rpc||"",""); chk("rpc_on",(p.rpc_on??!!(p.rpc||"").trim()),false);
+  chk("fa",p.fa,true);
+  // Presets viejos (mmap/mlock booleanos) → load_mode equivalente
+  set("load_mode",p.load_mode||(p.mlock?(p.mmap===false?"mlock":"mmap+mlock"):(p.mmap===false?"none":"auto")),"auto");
+  set("lazy_mode",p.lazy_mode||"","");
+  set("reasoning",p.reasoning||(p.thinking===false?"off":"auto"),"auto");
+  set("reasoning_preserve",p.reasoning_preserve||"","");
+  chk("ple_cpu",p.ple_cpu,false); chk("backend_sampling",p.backend_sampling,false);
+  set("ot",p.ot||"",""); set("spec_draft",p.spec_draft||"",""); set("spec_n_max",p.spec_n_max||"","");
+  set("cache_ram",p.cache_ram||"",""); set("ctx_ckpt",p.ctx_ckpt||"",""); set("image_min_tokens",p.image_min_tokens||"","");
+  chk("no_webui",p.no_webui,false); chk("fit_off",p.fit_off,false); chk("spec_mtp",p.spec_mtp,false);
+  chk("use_ctf",p.use_ctf,false); set("ctf_path",p.ctf_path||"","");
+  chk("dry",p.dry,false);
+  set("dry_multiplier",p.dry_multiplier||"","");
+  set("dry_base",p.dry_base||"","");
+  set("dry_allowed_length",p.dry_allowed_length||"","");
+  set("dry_penalty_last_n",p.dry_penalty_last_n||"","");
+  toggleCtf(); toggleDry();
+  if(p.model) [...g("model").options].forEach(o=>{if(o.value===p.model)g("model").value=p.model;});
+  if(p.device){
+    // Prioridad: resolver por NOMBRE de GPU (estable) sobre el id "VulkanN"
+    // guardado (que puede haber cambiado de orden desde que se guardó).
+    let ids=(resolveDeviceIds(p.deviceNames)||p.device).split(",").filter(Boolean);
+    applyDevChecks(ids);
+  } else {
+    // Perfil sin GPU marcada -> estado "Auto" (sin --device).
+    [...g("devchk").querySelectorAll("input")].forEach(i=>i.checked=false);
+  }
+  if(p.engine) g("engine").value=p.engine;
+  set("port",p.port,1234);
+  rpcToggle(); updateMmprojHint();
+}
+
+// Marca los checkboxes de la lista de IDs (desmarca el resto). Se llama desde
+// applyCfg para restaurar la selección guardada. Si algún id ya no existe
+// (GPU desconectada / motor cambiado), se ignora — la UI refleja solo lo que hay.
+function applyDevChecks(ids){
+  const cbs=[...g("devchk").querySelectorAll("input")];
+  cbs.forEach(c=>{ c.checked=ids.includes(c.dataset.id); });
+  tsVisibility(); scheduleEstimate();
+}
+
+// ── Flags avanzados: mostrar/ocultar sub-campos ─────────────────────────────
+let lastArch="", lastDrafts=[], lastHasMtp=false;
+// Ajustes recomendados para Qwen4 (arch qwen4exp = Qwen3.8-Flash-Next), build b11193:
+//  · PLE (per_layer_token_embd) a CPU + lazy auto → varios GB menos de VRAM
+//  · load-mode auto (mmap; lazy lo necesita)
+//  · MTP: sidecar mtp-*.gguf si existe (auto), si no el embebido; n-max 3
+//    (0eadefebd: con rollback recurrente, n-max 3 da 144-183 t/s vs 108 sin draft)
+//  · caché de prompts: cache-ram 20000 + 32 checkpoints (híbrido recurrente)
+//  · muestreo: temp 1.0, top-p 0.95, top-k 20, min-p 0, KV q8_0 + FA
+function applyQwen4(){
+  const S=(id,v)=>{g(id).value=v}, C=(id,v)=>{g(id).checked=v};
+  C("fa",true); S("ctk","q8_0"); S("ctv","q8_0");
+  S("load_mode","auto"); S("lazy_mode","auto"); C("ple_cpu",true);
+  const hasSide=lastDrafts.some(d=>/[\\/]mtp-[^\\/]*$/i.test(d));
+  C("spec_mtp", hasSide||lastHasMtp); S("spec_draft", hasSide?"auto":""); S("spec_n_max","3");
+  C("backend_sampling",true);
+  S("cache_ram","20000"); S("ctx_ckpt","32");
+  // mmproj de OTRO modelo (p.ej. heredado del perfil por defecto) → se quita
+  const mdir=g("model").value.replace(/[\\/][^\\/]*$/,""), mp=g("mmproj").value;
+  if(mp && !mp.startsWith(mdir)){ S("mmproj",""); if(typeof updateMmprojHint==="function") updateMmprojHint(); }
+  // quitar de Flags extra lo que ahora gestiona el panel
+  S("extra",(g("extra").value||"").replace(/--cache-ram\s+\S+|--spec-draft-backend-sampling|-ot\s+per_layer_token_embd=CPU|--load-mode\s+\S+|--lazy-mode\s+\S+|--no-mmap|--mlock/g,"").replace(/\s+/g," ").trim());
+  S("temp","1.0"); S("topp","0.95"); S("topk","20"); S("minp","0"); S("presp","0");
+  S("reasoning","auto"); C("fit_off",true);
+  if(lastArch && lastArch!=="qwen4exp")
+    alert(`Ojo: el modelo seleccionado es '${lastArch}', no qwen4exp. Ajustes aplicados igualmente.`);
+  if(!hasSide && !lastHasMtp) alert("Este GGUF no trae MTP (ni embebido ni mtp-*.gguf al lado): se deja MTP desactivado.");
+  scheduleEstimate();
+}
+
+function toggleCtf(){
+  g("ctfRow").style.display=g("use_ctf").checked?"block":"none";
+  if(g("use_ctf").checked && !g("ctf_path").value)
+    g("ctf_path").value="fixed/chat_template.jinja";   // relativa a la carpeta del manager (portable)
+}
+function toggleDry(){
+  g("dryRow").style.display=g("dry").checked?"flex":"none";
+  if(g("dry").checked){
+    if(!g("dry_multiplier").value)     g("dry_multiplier").value="0.8";
+    if(!g("dry_base").value)           g("dry_base").value="1.75";
+    if(!g("dry_allowed_length").value) g("dry_allowed_length").value="2";
+    if(!g("dry_penalty_last_n").value) g("dry_penalty_last_n").value="1024";
+  }
+}
+
+// ── Motor (llama-vulkan / llama-rocm) ───────────────────────────────────────
+async function setEngine(){
+  const val=g("engine").value;
+  const r=await fetch("/api/engine",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({engine:val})});
+  const j=await r.json();
+  if(j.error) alert("Error al cambiar de motor: "+j.error);
+  refresh();
+}
+
+// ── Perfiles ──────────────────────────────────────────────────────────────
+let _defaultProfileSlot=null;
+async function refreshProfilesSelect(keepSelection){
+  const r=await fetch("/api/profile",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"list"})});
+  const j=await r.json();
+  const sel=g("profileSelect");
+  const cur=sel.value;
+  const names=j.profiles||[];
+  _defaultProfileSlot=j.default||null;
+  sel.innerHTML=names.length
+    ?names.map(n=>`<option value="${n}">${n===_defaultProfileSlot?"⭐ ":""}${n}</option>`).join("")
+    :`<option value="">(sin perfiles guardados)</option>`;
+  if(keepSelection&&names.includes(cur)) sel.value=cur;
+  updateDefaultBtn();
+}
+function updateDefaultBtn(){
+  const btn=g("defaultProfileBtn"); if(!btn) return;
+  const slot=g("profileSelect").value;
+  const isDefault=slot&&slot===_defaultProfileSlot;
+  btn.textContent=isDefault?"⭐ Predeterminado":"☆ Marcar predeterminado";
+  btn.title=isDefault
+    ?`Este perfil se carga solo al iniciar Llama Manager. Clic para quitarlo.`
+    :`Marca este perfil para que se cargue solo al iniciar Llama Manager (incluye el modelo).`;
+}
+async function toggleDefaultProfile(){
+  const slot=g("profileSelect").value;
+  if(!slot){ alert("Selecciona un perfil primero."); return; }
+  const action=(slot===_defaultProfileSlot)?"clear_default":"set_default";
+  const r=await fetch("/api/profile",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({action,slot})});
+  const j=await r.json();
+  if(!j.ok){ alert("Error: "+j.error); return; }
+  await refreshProfilesSelect(true);
+  const st=g("profileStatus");
+  st.textContent=action==="set_default"?`⭐ "${slot}" es ahora el perfil por defecto`:`Perfil por defecto quitado`;
+  setTimeout(()=>st.textContent="",2500);
+}
+async function doSaveProfile(slot){
+  const r=await fetch("/api/profile",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({action:"save",slot,cfg:readCfg()})});
+  const j=await r.json();
+  const st=g("profileStatus");
+  st.textContent=j.ok?`✓ Perfil "${slot}" guardado`:`Error: ${j.error}`;
+  setTimeout(()=>st.textContent="",2500);
+  return j.ok;
+}
+async function saveProfile(){
+  const slot=g("profileSelect").value;
+  if(!slot){ alert("No hay ningún perfil seleccionado. Usa 'Guardar como…' para crear uno nuevo."); return; }
+  await doSaveProfile(slot);
+  await refreshProfilesSelect(true);
+}
+async function saveProfileAsNew(){
+  const name=(g("newProfileName").value||"").trim();
+  if(!name){ alert("Escribe un nombre para el nuevo perfil."); return; }
+  const ok=await doSaveProfile(name);
+  if(ok){ g("newProfileName").value=""; await refreshProfilesSelect(false); g("profileSelect").value=name; }
+}
+async function loadProfile(){
+  const slot=g("profileSelect").value; if(!slot) return;
+  const r=await fetch("/api/profile",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({action:"load",slot})});
+  const j=await r.json();
+  const st=g("profileStatus");
+  if(j.ok){ applyCfg(j.cfg); st.textContent=`✓ Perfil "${slot}" cargado`; }
+  else st.textContent=j.error||"Sin guardar";
+  setTimeout(()=>st.textContent="",2500);
+}
+async function deleteProfile(){
+  const slot=g("profileSelect").value; if(!slot) return;
+  if(!confirm(`¿Borrar el perfil "${slot}"?`)) return;
+  const r=await fetch("/api/profile",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({action:"delete",slot})});
+  const j=await r.json();
+  if(!j.ok){ alert("Error: "+j.error); return; }
+  g("profileStatus").textContent=`✓ Perfil "${slot}" borrado`;
+  setTimeout(()=>g("profileStatus").textContent="",2500);
+  await refreshProfilesSelect(false);
+}
+
+// ── Gestor de modelos (borrar del disco) ────────────────────────────────────
+let _modelManagerList=[];
+function openModelManager(){
+  const existing=g("modelManagerModal"); if(existing) existing.remove();
+  const modal=document.createElement("div");
+  modal.id="modelManagerModal";
+  modal.style.cssText="position:fixed;inset:0;background:#000a;z-index:9999;display:flex;align-items:center;justify-content:center";
+  document.body.appendChild(modal);
+  modal.addEventListener("click",e=>{ if(e.target===modal) modal.remove(); });
+  renderModelManager();
+}
+function renderModelManager(){
+  const modal=g("modelManagerModal"); if(!modal) return;
+  _modelManagerList=(STATE&&STATE.models)||[];
+  modal.innerHTML=`<div style="background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:20px;max-width:720px;width:92%;max-height:80vh;overflow-y:auto">
+    <div style="font-family:var(--mono);font-size:11px;letter-spacing:2px;color:var(--amber);margin-bottom:14px">
+      GESTIONAR MODELOS (${_modelManagerList.length}) <button class="ghost" style="float:right;padding:2px 8px" onclick="g('modelManagerModal').remove()">✕</button></div>
+    <p class="muted" style="margin-bottom:10px">Clic en un modelo para seleccionarlo · 🗑 para borrarlo del disco (irreversible).</p>
+    ${_modelManagerList.length?_modelManagerList.map((m,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--line);border-radius:4px;margin-bottom:6px;font-family:var(--mono);font-size:12px;background:var(--panel2)">
+      <div style="flex:1;cursor:pointer" onclick="selectManagedModel(${i})">
+        <div style="color:var(--txt)">${m.name}</div>
+        <div style="color:var(--dim);font-size:10.5px">${m.size_gb} GB</div>
+      </div>
+      <button class="kill" style="padding:4px 10px" onclick="deleteManagedModel(${i})">🗑 Borrar</button>
+    </div>`).join(""):`<p class="muted">No hay modelos en la carpeta configurada.</p>`}
+  </div>`;
+}
+function selectManagedModel(idx){
+  const m=_modelManagerList[idx]; if(!m) return;
+  g("model").value=m.path; scheduleEstimate(); checkMmproj();
+  g("modelManagerModal")?.remove();
+}
+async function deleteManagedModel(idx){
+  const m=_modelManagerList[idx]; if(!m) return;
+  if(!confirm("¿Borrar definitivamente este modelo del disco?\n\n"+m.name)) return;
+  const r=await fetch("/api/model",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:m.path})});
+  const j=await r.json();
+  if(j.error){ alert("Error: "+j.error); return; }
+  await refresh();
+  renderModelManager();
+}
+
+// ── Apagado ───────────────────────────────────────────────────────────────
+async function shutdownPC(){
+  if(!confirm("⚠ ¿Apagar el equipo?\nSe apagará en 10 segundos.")) return;
+  const r=await fetch("/api/shutdown",{method:"POST"});
+  const j=await r.json();
+  if(j.ok){ document.body.style.background="#1a0000"; alert("✓ Apagando en 10s...\nCancela con: shutdown /a"); }
+  else alert("Error: "+j.error);
+}
+
+// ── Refresh principal ─────────────────────────────────────────────────────
+let _profilesChecked=false;
+async function refresh(){
+  const r=await fetch("/api/state"); STATE=await r.json();
+
+  // GPUs
+  g("gpus").innerHTML=STATE.devices.map(d=>{
+    const used=d.used_mib??d.total_mib-d.free_mib;
+    const pct=d.total_mib?Math.round(used/d.total_mib*100):0;
+    const srcTxt=d.vram_live?`🟢 ${STATE.sys.vram_source||"wmi"}`:`🟡 sin contraste WMI (usando vulkan)`;
+    const idTip=d.raw_id?` title="${d.raw_id}"`:"";
+    return `<div class="gpu"${idTip}><span class="gid">${d.id}</span><span class="gname">${d.name}</span>
+      ${bar(pct,pct>96)}
+      <span class="mib">${used}/${d.total_mib} MiB (${pct}%) <span style="font-size:10px;color:var(--dim)">${srcTxt}</span></span></div>`;
+  }).join("")||`<div class="err">${STATE.devices_error||"Sin GPUs"}</div>`;
+
+  // RAM + shared
+  const s=STATE.sys;
+  const ramPct=s.ram_total?Math.round(s.ram_used/s.ram_total*100):0;
+  // "shr" = memoria compartida en uso, sumada de las GPUs reales ya
+  // emparejadas (STATE.devices) — no de la lista cruda de system_monitor,
+  // que puede traer entradas de más (adaptadores virtuales) o de menos
+  // según la fuente activa en cada equipo.
+  const shr=STATE.devices.reduce((a,d)=>a+(d.shared_mib||0),0);
+  g("sysbars").innerHTML=`<div class="gpu"><span class="gid">RAM</span><span class="gname">Sistema</span>
+    ${bar(ramPct,ramPct>92)}<span class="mib">${s.ram_used}/${s.ram_total} MiB (${ramPct}%)</span></div>`+
+    (shr>0?`<div class="gpu"><span class="gid">SHARED</span><span class="gname">GPU compartida (desbordada de dedicada)</span>
+      ${bar(Math.min(100,Math.round(shr/8192*100)),shr>1024)}<span class="mib">${shr} MiB</span></div>`:"");
+
+  const ab=g("alert-bar");
+  if(shr>1024){ ab.style.display="block"; ab.textContent=`⚠ DESBORDAMIENTO: ${(shr/1024).toFixed(1)} GB en RAM compartida.`; }
+  else ab.style.display="none";
+
+  // Modelos
+  const ms=g("model");
+  const mSig=STATE.models.map(m=>m.path).join("\n");
+  if(ms.dataset.sig!==mSig){
+    ms.innerHTML=STATE.models.map(m=>`<option value="${m.path.replace(/"/g,'&quot;')}">${m.name} — ${m.size_gb} GB</option>`).join("");
+    ms.dataset.sig=mSig;
+  }
+  g("mcount").textContent=STATE.models.length;
+  g("mdir").textContent=STATE.models_dir;
+  if(g("modelManagerModal")) renderModelManager();
+
+  // Motores disponibles — el backend decide cuáles existen en ESTE host y los
+  // manda en STATE.engines (vulkan siempre, +rocm en Windows con LM Studio,
+  // +hipfire donde esté instalado). Antes este <select> traía hardcoded
+  // "Vulkan/ROCm" y hipfire jamás aparecía ni se podía elegir.
+  const es=g("engine");
+  const eSig=(STATE.engines||["vulkan"]).join(",");
+  if(es.dataset.sig!==eSig){
+    const label={vulkan:"Vulkan",rocm:"ROCm","rocm-lms":"ROCm (LM Studio)",hipfire:"hipfire"};
+    es.innerHTML=(STATE.engines||["vulkan"]).map(e=>`<option value="${e}">${label[e]||e}</option>`).join("");
+    es.dataset.sig=eSig;
+  }
+  if(STATE.engine && es.value!==STATE.engine) es.value=STATE.engine;
+  // Versión: manager + build llama.cpp esperado vs instalado en el motor activo
+  if(STATE.versions){
+    const V=STATE.versions, E=V.engine||{};
+    const inst=E.installed_build?("b"+E.installed_build):(E.installed?"?":"no instalado");
+    g("verBadge").innerHTML=`v${V.app}${V.commit?` (${V.commit})`:""} · llama.cpp ${V.llama_cpp} · motor ${inst}`+
+      (E.match?"":` <span style="color:var(--warn)" title="${(E.installed||"").replace(/"/g,"&quot;")}">⚠ distinto (ejecuta update_llama)</span>`);
+  }
+
+  // Devices: checkboxes de TODAS las GPU locales (marcar = usar esa; el orden
+  // de marcado es el orden de --device; sin marcar = "Auto" sin --device,
+  // donde llama.cpp decide y descarga a los esclavos RPC el que no cabe).
+  const ds=g("devchk");
+  const dSig=STATE.devices.map(d=>d.id).join(",");
+  if(ds.dataset.sig!==dSig){
+    const prev=(ds.dataset.prevIds||"").split(",").filter(Boolean);
+    ds.innerHTML=STATE.devices.map(d=>`<label class="devchk-row"><input type="checkbox" data-id="${d.id}" onchange="tsVisibility();scheduleEstimate()">${d.id} — ${d.name} <span class="muted">(${(d.total_mib/1024).toFixed(0)} GB</span>${prev.includes(d.id)?' checked':''}</label>`).join("");
+    ds.innerHTML+=`<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="ghost" onclick="[...g('devchk').querySelectorAll('input')].forEach(i=>i.checked=true);tsVisibility();scheduleEstimate()">Todas</button><button type="button" class="ghost" onclick="[...g('devchk').querySelectorAll('input')].forEach(i=>i.checked=false);tsVisibility();scheduleEstimate()">Ninguna (Auto+red)</button></div>`;
+    ds.dataset.sig=dSig;
+    rpcToggle();
+  }
+
+  // Instancias
+  let anyLoading=false;
+  g("instances-tbody").innerHTML=STATE.instances.map(i=>{
+    if(i.health==="loading") anyLoading=true;
+    return `<tr><td><span class="dot ${i.health}"></span></td>
+      <td>:${i.port}</td>
+      <td title="${i.model}">${(i.alias?i.alias+" ⇢ ":"")+i.model.slice(0,24)}${i.health==="loading"?' <span class="loadtag">cargando…</span>':''}${i.anthropic?' <span style="color:var(--ok);font-size:10px">⚡CC</span>':''}</td>
+      <td>${i.device}${i.rpc?`<div title="${i.rpc}" style="font-size:10px;color:var(--amber)">🌐 maestro → ${i.rpc}</div>`:''}</td><td>${i.engine||"vulkan"}</td><td>${fmtK(i.ctx)}</td><td>${fmtUp(i.uptime_s)}</td>
+      <td><button class="stop" onclick="stopInst(${i.port},false)">STOP</button></td>
+      <td><button class="kill" onclick="stopInst(${i.port},true)">KILL</button></td></tr>`;
+  }).join()||`<tr><td colspan="9" class="muted">Sin instancias.</td></tr>`;
+  g("loading").style.display=anyLoading?"inline":"none";
+  g("badge-inst").textContent=STATE.instances.length||"0";
+
+  // Huérfanos
+  g("orphans").innerHTML=STATE.orphans.length
+    ?`<div class="err" style="margin-top:10px">Huérfanos: `+STATE.orphans.map(p=>`PID ${p} <button class="kill" onclick="killPid(${p})">KILL</button>`).join(" · ")+`</div>`:"";
+
+  fillPortSelect(g("chatport"),STATE.instances);
+  fillPortSelect(g("logport"),STATE.instances);
+  fillPortSelect(g("proxyport"),STATE.instances,true);
+  fillPortSelect(g("visionport"),STATE.instances);
+  fillPortSelect(g("agentport"),STATE.instances);
+
+  // Proxy URLs
+  if(STATE.proxy_port){
+    g("proxyport").value=String(STATE.proxy_port);
+    const base=`http://${location.hostname}:${location.port}`;
+    g("proxyurl").textContent=`${base}/v1  →  :${STATE.proxy_port}`;
+    g("claudeurl").textContent=`ANTHROPIC_BASE_URL=${base}  →  :${STATE.proxy_port}`;
+  } else {
+    g("proxyurl").textContent="proxy sin destino";
+    g("claudeurl").textContent="Claude Code: sin destino";
+  }
+
+  if(g("logfollow").checked) loadLog();
+  if(!estDone&&STATE.models.length){ estDone=true; scheduleEstimate(); }
+  if(!_profilesChecked){ _profilesChecked=true; autoLoadProfiles(); }
+
+  // Estado del esclavo local (ggml-rpc-server corriendo en ESTE host)
+  const slaves=STATE.slaves||[];
+  if(slaves.length){
+    const s0=slaves[0];
+    g("slaveState").innerHTML=`🟢 Escuchando en <b>:${s0.port}</b> (PID ${s0.pid}) — expone las GPUs de este host`;
+    g("slaveState").style.color="var(--ok)";
+    g("slaveStopBtn").style.display="inline-block";
+    if(!g("rpcport").value||g("rpcport").value==="50052") g("rpcport").value=String(s0.port);
+  } else {
+    g("slaveState").textContent="— sin esclavo activo —";
+    g("slaveState").style.color="";
+    g("slaveStopBtn").style.display="none";
+  }
+}
+
+// ── Modo esclavo (ggml-rpc-server) ─────────────────────────────────────────
+async function startSlave(){
+  const port=+g("rpcport").value||50052;
+  g("slaveState").textContent="Arrancando…"; g("slaveState").style.color="var(--dim)";
+  const r=await fetch("/api/slave",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({port,engine:g("engine").value})});
+  const j=await r.json();
+  if(j.error){ g("slaveState").textContent="❌ "+j.error; g("slaveState").style.color="var(--bad)"; }
+  else refresh();
+}
+async function stopSlave(){
+  const port=+(g("rpcport").value||50052);
+  await fetch(`/api/slave/${port}`,{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({})});
+  refresh();
+}
+
+async function autoLoadProfiles(){
+  await refreshProfilesSelect(false);
+  if(!_defaultProfileSlot) return;
+  const r=await fetch("/api/profile",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({action:"load",slot:_defaultProfileSlot})});
+  const j=await r.json();
+  if(j.ok){
+    applyCfg(j.cfg); g("profileSelect").value=_defaultProfileSlot; updateDefaultBtn();
+    g("profileStatus").textContent=`⭐ Perfil "${_defaultProfileSlot}" cargado (predeterminado)`;
+    setTimeout(()=>g("profileStatus").textContent="",3000);
+  }
+}
+
+// ── Acciones control ──────────────────────────────────────────────────────
+async function start(){
+  g("err").textContent="";
+  g("err").textContent="⏳ Arrancando…";
+  let j;
+  try{
+    const r=await fetch("/api/start",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(readCfg())});
+    const txt=await r.text();
+    try{ j=JSON.parse(txt); }catch(_){ j={error:`HTTP ${r.status}: ${txt.replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim().slice(0,400)}`}; }
+  }catch(e){ j={error:"No hay respuesta de llama_manager ("+e+"). ¿Está arrancado?"}; }
+  if(j.error) g("err").textContent=j.error;
+  else { g("err").textContent=""; showPage("instances"); }
+  refresh();
+}
+async function stopInst(port,force){
+  await fetch("/api/stop",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({port,force})});
+  refresh();
+}
+async function killPid(pid){
+  await fetch("/api/kill",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pid})});
+  refresh();
+}
+async function killAll(){
+  if(!confirm("¿Matar TODOS los procesos llama-server.exe?")) return;
+  await fetch("/api/killall",{method:"POST"}); refresh();
+}
+async function setProxy(){
+  const port=g("proxyport").value||null;
+  await fetch("/api/proxy",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({port})});
+  refresh();
+}
+
+// ── Log ───────────────────────────────────────────────────────────────────
+async function loadLog(){
+  const port=g("logport").value; if(!port) return;
+  const r=await fetch("/api/log?port="+port); const j=await r.json();
+  const el=g("logbox"); el.textContent=j.log;
+  if(g("logfollow").checked) el.scrollTop=el.scrollHeight;
+}
+setInterval(()=>{ if(g("logfollow").checked) loadLog(); },2000);
+
+// ── Estimador VRAM + capabilities ─────────────────────────────────────────
+let estTimer=null, estDone=false;
+function scheduleEstimate(){ clearTimeout(estTimer); estTimer=setTimeout(estimate,300); }
+
+function capBadge(cap){
+  const m={vision:{cls:"cap-vision",icon:"👁",label:"Vision"},
+            tools:{cls:"cap-tools",icon:"🔧",label:"Tools"},
+            reasoning:{cls:"cap-reasoning",icon:"💭",label:"Reasoning"}};
+  const c=m[cap]||{cls:"cap-vision",icon:"",label:cap};
+  return `<span class="cap-badge ${c.cls}">${c.icon} ${c.label}</span>`;
+}
+
+async function estimate(){
+  if(!STATE) return;
+  const model=g("model").value; if(!model) return;
+  const ctx=parseCtx(g("ctx").value);
+  const q=new URLSearchParams({model,ctx,ctk:g("ctk").value,ctv:g("ctv").value,ngl:g("ngl").value,ncpumoe:g("ncpumoe").value||0});
+  let j; try{ j=await(await fetch("/api/estimate?"+q)).json(); }catch(e){ return; }
+  const el=g("estimate");
+  if(j.error){ el.textContent=""; return; }
+
+  currentCaps=j.capabilities||[];
+  lastArch=j.arch||""; lastDrafts=j.drafts||[]; lastHasMtp=!!j.has_mtp;
+  {
+    const mtp=lastDrafts.filter(d=>/[\\/]mtp-[^\\/]*$/i.test(d));
+    const parts=[];
+    if(lastArch) parts.push(`arch: ${lastArch}`+(lastArch==="qwen4exp"?" ✔ Qwen4":""));
+    if(lastHasMtp) parts.push("MTP embebido");
+    if(mtp.length) parts.push(`MTP sidecar: ${mtp[0].split(/[\\/]/).pop()}`);
+    g("archHint").textContent=parts.length?`(${parts.join(" · ")})`:"";
+  }
+
+  // Ctx hint (con auto-recorte si se pide más de lo que soporta el modelo)
+  const hint=g("ctxHint");
+  let hh=currentCaps.map(capBadge).join(" ");
+  if(j.model_max_ctx){
+    const mcK=fmtK(j.model_max_ctx), curK=fmtK(ctx);
+    if(ctx>j.model_max_ctx){
+      g("ctx").value=fmtK(j.model_max_ctx);
+      hh+=` <span style="color:var(--warn)">⚠ pediste ${curK}, el modelo solo soporta ${mcK} — recortado automáticamente</span>`;
+      scheduleEstimate();  // reestimar ya con el valor recortado
+      hint.innerHTML=hh;
+      return;
+    } else
+      hh+=` <span style="color:var(--dim)">ctx máx: <b style="color:var(--warn)">${mcK}</b></span>`;
+  } else if(!currentCaps.length){
+    hh=`<span style="color:var(--dim)">metadatos no disponibles</span>`;
+  }
+  hint.innerHTML=hh;
+
+  // VRAM
+  const devIds=selDeviceIds();
+  let vramTotal=0;
+  for(const d of STATE.devices) if(devIds.includes(d.id)) vramTotal+=d.total_mib/1024;
+
+  let ctxFitLine="";
+  if(j.kv_per_tok_bytes&&j.kv_per_tok_bytes>0&&vramTotal>0){
+    const avail=vramTotal-j.weights_gpu_gb-j.buffers_gb_base;
+    if(avail>0){
+      const ctxMax=Math.floor(avail/(j.kv_per_tok_bytes/(1024**3)));
+      const cmK=fmtK(ctxMax);
+      ctxFitLine=ctxMax>=ctx
+        ?` · <span style="color:var(--ok)">cabe hasta ~${cmK}</span>`
+        :` · <span style="color:var(--bad)">máx cabe ~${cmK} (pedido ${fmtK(ctx)})</span>`;
+    }
+  }
+
+  const kvTxt=j.kv_known?`KV ${j.kv_gb} GB (${g("ctk").value}/${g("ctv").value} @ ${fmtK(ctx)})`:`KV ?`;
+  const src=j.calibrated?`<span style="color:var(--ok)">● calibrado</span>`:`<span style="color:var(--dim)">○ teórico</span>`;
+  const layerTxt=j.n_layer?`${j.n_layer} capas${j.is_moe?` · MoE${j.n_experts?` (${j.n_experts} expertos)`:""}`:" · denso"}`:"";
+  let line=`${layerTxt?layerTxt+" · ":""}pesos ${j.weights_gb} GB + ${kvTxt} + bufs ~${j.buffers_gb} GB = <b>${j.total_gb} GB</b> / ${vramTotal.toFixed(1)} GB · ${src}${ctxFitLine}`;
+  if(j.cpu_gb>0.1) line+=` · CPU: ${j.cpu_gb} GB`;
+  let color="var(--ok)",tag="CABE";
+  if(vramTotal&&j.total_gb>vramTotal){ color="var(--bad)"; tag="DESBORDA"; }
+  else if(vramTotal&&j.total_gb>vramTotal*0.92){ color="var(--warn)"; tag="JUSTO"; }
+  let warn=(g("ctk").value!=="f16"||g("ctv").value!=="f16")&&!g("fa").checked
+    ?` <span style="color:var(--bad)">⚠ KV cuantizado requiere FA</span>`:"";
+  el.innerHTML=`<span style="color:${color};font-weight:700">[${tag}]</span> ${line}${warn}`;
+}
+g("model").addEventListener("change",()=>{ scheduleEstimate(); checkMmproj(); });
+g("devchk").addEventListener("change",scheduleEstimate);
+g("fa").addEventListener("change",scheduleEstimate);
+g("profileSelect").addEventListener("change",updateDefaultBtn);
+
+// ── Comprobación automática de mmproj (evita el mismatch n_embd al arrancar) ──
+async function checkMmproj(){
+  const model=g("model").value; if(!model) return;
+  const current=(g("mmproj").value||"").trim();
+  const q=new URLSearchParams({model, current});
+  let j; try{ j=await(await fetch("/api/mmproj_check?"+q)).json(); }catch(e){ return; }
+  if(j.error) return;
+
+  if(!current){
+    // Sin mmproj puesto: si hay uno compatible en la misma carpeta del modelo, lo autorrellenamos
+    if(j.suggested_mmproj){
+      g("mmproj").value=j.suggested_mmproj;
+      updateMmprojHint(true);
+    }
+    return;
+  }
+
+  if(j.current_compatible===false){
+    const hint=g("mmprojHint");
+    let msg=`<span style="color:var(--bad)">⚠ mmproj incompatible: modelo n_embd=${j.model_embd}, mmproj n_embd=${j.current_embd}</span>`;
+    if(j.suggested_mmproj){
+      const name=j.suggested_mmproj.split(/[\\/]/).pop();
+      msg+=`<br><span style="color:var(--warn)">Sugerido para este modelo: ${name} — `+
+           `<a href="#" onclick="g('mmproj').value='${j.suggested_mmproj.replace(/\\/g,"\\\\")}';updateMmprojHint();return false;" style="color:var(--amber)">usar este</a></span>`;
+    } else {
+      msg+=`<br><span style="color:var(--dim)">No hay mmproj compatible en la carpeta del modelo — quítalo o busca el correcto</span>`;
+    }
+    hint.innerHTML=msg;
+  } else if(j.current_compatible===null && j.current_embd===null){
+    // No pudimos leer el n_embd del mmproj (metadatos "clip" no estándar) —
+    // no es un error, solo no lo hemos podido verificar automáticamente.
+    const hint=g("mmprojHint");
+    hint.innerHTML+=` <span style="color:var(--dim)">(compatibilidad no verificable automáticamente)</span>`;
+  }
+}
+
+// ── mmproj ────────────────────────────────────────────────────────────────
+function updateMmprojHint(skipCheck){
+  const v=(g("mmproj").value||"").trim();
+  const hint=g("mmprojHint");
+  if(!v){ hint.textContent=""; return; }
+  hint.innerHTML=`<span style="color:var(--ok)">✓ ${v.split(/[\\/]/).pop()}</span> — visión habilitada al arrancar`;
+  if(!skipCheck) checkMmproj();
+}
+
+// ── Reparto automático GPU(s)/RAM ────────────────────────────────────────
+async function autosplit(){
+  const model=g("model").value; if(!model){ return; }
+  const ctx=parseCtx(g("ctx").value);
+  const devices=selDeviceIds().join(",");
+  const q=new URLSearchParams({model,ctx,ctk:g("ctk").value,ctv:g("ctv").value,devices});
+  const el=g("estimate");
+  el.innerHTML=`<span style="color:var(--dim)">calculando reparto…</span>`;
+  let j; try{ j=await(await fetch("/api/autosplit?"+q)).json(); }catch(e){
+    el.innerHTML=`<span style="color:var(--bad)">⚠ fallo al calcular reparto</span>`; return;
+  }
+  if(j.error){ el.innerHTML=`<span style="color:var(--bad)">⚠ ${j.error}</span>`; return; }
+
+  g("ngl").value=j.recommended_ngl ?? 999;
+  if(j.recommended_ncpumoe!=null) g("ncpumoe").value=j.recommended_ncpumoe;
+  if(j.recommended_tensor_split){
+    // recommended_tensor_split trae fracciones (ej 0.6,0.4); llama.cpp acepta proporciones tal cual
+    g("ts").value=j.recommended_tensor_split;
+  }
+
+  const budgets=(j.gpu_budgets_gb||[]).map(([d,b])=>`${d}: ${b} GB libres`).join(" · ");
+  const tag=j.fits?`<span style="color:var(--ok);font-weight:700">[REPARTO OK]</span>`
+                  :`<span style="color:var(--warn);font-weight:700">[REPARTO AL LÍMITE]</span>`;
+  let line=`${tag} ngl=${j.recommended_ngl ?? "?"}`;
+  if(j.recommended_ncpumoe!=null) line+=`, --n-cpu-moe ${j.recommended_ncpumoe}`;
+  if(j.recommended_tensor_split) line+=`, -ts ${j.recommended_tensor_split}`;
+  line+=` · GPU: ${j.weights_gpu_gb ?? "?"} GB pesos + ${j.kv_gb ?? "?"} GB KV`;
+  if(j.weights_cpu_gb>0.05) line+=` · RAM: ${j.weights_cpu_gb} GB`;
+  line+=`<br><span style="color:var(--dim);font-size:11px">${budgets} · RAM libre: ${j.ram_budget_gb} GB (con margen de seguridad)</span>`;
+  if(j.reason) line+=`<br><span style="color:var(--warn)">⚠ ${j.reason}</span>`;
+  el.innerHTML=line;
+}
+
+async function pickMmproj(){
+  const r=await fetch("/api/mmprojs"); const d=await r.json();
+  const list=d.mmprojs||[];
+  if(!list.length){
+    const entered=prompt("No se encontraron mmproj.\nPega la ruta completa:");
+    if(entered?.trim()){ g("mmproj").value=entered.trim(); updateMmprojHint(); }
+    return;
+  }
+  const existing=document.getElementById("mmprojModal");
+  if(existing) existing.remove();
+  const modal=document.createElement("div");
+  modal.id="mmprojModal";
+  modal.style.cssText="position:fixed;inset:0;background:#000a;z-index:9999;display:flex;align-items:center;justify-content:center";
+  modal.innerHTML=`<div style="background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:20px;max-width:680px;width:90%;max-height:80vh;overflow-y:auto">
+    <div style="font-family:var(--mono);font-size:11px;letter-spacing:2px;color:var(--amber);margin-bottom:14px">
+      SELECCIONAR MMPROJ <button class="ghost" style="float:right;padding:2px 8px" onclick="document.getElementById('mmprojModal').remove()">✕</button></div>
+    ${list.map((m,i)=>`<div onclick="selectMmproj(${i})" style="cursor:pointer;padding:9px 12px;border:1px solid var(--line);border-radius:4px;margin-bottom:6px;font-family:var(--mono);font-size:12px;background:var(--panel2)" onmouseover="this.style.borderColor='var(--amber)'" onmouseout="this.style.borderColor='var(--line)'">
+      <div style="color:var(--txt)">${m.name.split(/[\\/]/).pop()}</div>
+      <div style="color:var(--dim);font-size:10.5px">${m.name} · ${m.size_kb} KB</div></div>`).join("")}
+  </div>`;
+  document.body.appendChild(modal);
+  window._mmprojList=list;
+  modal.addEventListener("click",e=>{ if(e.target===modal) modal.remove(); });
+}
+function selectMmproj(idx){
+  const m=window._mmprojList[idx];
+  if(m){ g("mmproj").value=m.path; updateMmprojHint(); }
+  document.getElementById("mmprojModal")?.remove();
+}
+g("mmproj").addEventListener("input",updateMmprojHint);
+
+// ── Vision ────────────────────────────────────────────────────────────────
+function onImgDrop(e){
+  e.preventDefault(); g("visionDrop").classList.remove("dragover");
+  const file=e.dataTransfer.files[0]; if(file) loadImageFile(file);
+}
+function onImgSelect(e){ const file=e.target.files[0]; if(file) loadImageFile(file); }
+function loadImageFile(file){
+  visionType=file.type||"image/jpeg";
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const du=ev.target.result; visionB64=du.split(",")[1];
+    const img=g("visionPreview"); img.src=du; img.style.display="block";
+    g("visionDrop").textContent="✓ "+file.name+" — clic para cambiar";
+  };
+  reader.readAsDataURL(file);
+}
+async function sendVision(){
+  if(!visionB64){ alert("Primero carga una imagen."); return; }
+  const port=g("visionport").value; if(!port){ alert("Sin instancias activas."); return; }
+  const box=g("visionBox"), vstats=g("visionStats");
+  box.textContent=""; vstats.textContent="enviando…";
+  const t0=performance.now();
+  let answer="",timings=null,firstTok=null,nChunks=0;
+  const mt=+g("visionMax").value||null;
+  const body={port:+port,prompt:g("visionPrompt").value||"Describe la imagen.",image_b64:visionB64,image_type:visionType};
+  if(mt) body.max_tokens=mt;
+  try{
+    const resp=await fetch("/api/vision",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(!resp.ok){ box.textContent="[ERROR HTTP "+resp.status+"]"; return; }
+    const reader=resp.body.getReader(); const dec=new TextDecoder(); let buf="";
+    while(true){
+      const{done,value}=await reader.read(); if(done) break;
+      buf+=dec.decode(value,{stream:true}).replace(/\r/g,"");
+      let idx;
+      while((idx=buf.indexOf("\n\n"))>=0){
+        const line=buf.slice(0,idx).trim(); buf=buf.slice(idx+2);
+        if(!line.startsWith("data:")) continue;
+        const data=line.slice(5).trim(); if(data==="[DONE]") continue;
+        let jj; try{ jj=JSON.parse(data); }catch(e){ continue; }
+        if(jj.error){ answer+="\n[ERROR] "+jj.error; box.textContent=answer; continue; }
+        if(jj.timings) timings=jj.timings;
+        const d=jj.choices?.[0]?.delta||{};
+        if(d.content){ if(firstTok===null) firstTok=performance.now(); answer+=d.content; nChunks++; box.textContent=answer; }
+      }
+    }
+  }catch(e){ box.textContent="[ERROR] "+e; }
+  const tt=((performance.now()-t0)/1000).toFixed(1);
+  if(timings){
+    const t=timings;
+    vstats.textContent=`prompt ${(t.prompt_per_second||0).toFixed(1)} t/s (${t.prompt_n||"?"} tok) · gen ${(t.predicted_per_second||0).toFixed(1)} t/s (${t.predicted_n||"?"} tok) · ${tt} s`;
+  } else vstats.textContent=`~${nChunks} tokens · ${tt} s`;
+}
+
+// ── Chat ──────────────────────────────────────────────────────────────────
+function addMsg(role,text){
+  const box=g("chatbox");
+  const div=document.createElement("div"); div.className="msg "+role;
+  div.innerHTML=`<span class="who">${role==="user"?"TÚ":"MODELO"}</span>`;
+  const span=document.createElement("span"); span.textContent=text;
+  div.appendChild(span); box.appendChild(div); box.scrollTop=box.scrollHeight;
+  return span;
+}
+function clearChat(){ chatHistory=[]; g("chatbox").innerHTML=""; }
+function setStats(pp,tg,pn,tn,tt){
+  g("s_pp").textContent=pp; g("s_tg").textContent=tg;
+  g("s_pn").textContent=pn; g("s_tn").textContent=tn; g("s_tt").textContent=tt;
+}
+
+async function streamChat(port,messages,out,maxTokens=null){
+  const t0=performance.now();
+  let answer="",reasoning="",nChunks=0,timings=null,firstTok=null;
+  const render=()=>{
+    out.innerHTML="";
+    if(reasoning){ const r=document.createElement("span"); r.style.cssText="color:var(--dim);font-style:italic;display:block;margin-bottom:6px"; r.textContent="〈razonando〉 "+reasoning; out.appendChild(r); }
+    const a=document.createElement("span"); a.textContent=answer; out.appendChild(a);
+    g("chatbox").scrollTop=1e9;
+  };
+  try{
+    const body={port:+port,messages}; if(maxTokens) body.max_tokens=maxTokens;
+    const r=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(!r.ok){ out.textContent="[ERROR HTTP "+r.status+"]"; return null; }
+    const reader=r.body.getReader(); const dec=new TextDecoder(); let buf="";
+    while(true){
+      const{done,value}=await reader.read(); if(done) break;
+      buf+=dec.decode(value,{stream:true}).replace(/\r/g,"");
+      let idx;
+      while((idx=buf.indexOf("\n\n"))>=0){
+        const line=buf.slice(0,idx).trim(); buf=buf.slice(idx+2);
+        if(!line.startsWith("data:")) continue;
+        const data=line.slice(5).trim(); if(data==="[DONE]") continue;
+        let j; try{ j=JSON.parse(data); }catch(e){ continue; }
+        if(j.error){ answer+="\n[ERROR] "+j.error; render(); continue; }
+        if(j.timings) timings=j.timings;
+        const d=j.choices?.[0]?.delta||{};
+        const rc=d.reasoning_content||d.reasoning;
+        if(rc){ if(firstTok===null) firstTok=performance.now(); reasoning+=rc; nChunks++; render(); }
+        if(d.content){ if(firstTok===null) firstTok=performance.now(); answer+=d.content; nChunks++; render(); }
+      }
+    }
+  }catch(e){ answer+="\n[ERROR] "+e; render(); }
+  const tt=((performance.now()-t0)/1000).toFixed(1);
+  const ttft=firstTok?((firstTok-t0)/1000).toFixed(2):null;
+  if(timings) setStats((timings.prompt_per_second||0).toFixed(1),(timings.predicted_per_second||0).toFixed(1),timings.prompt_n??"—",timings.predicted_n??"—",tt);
+  else{ const gs=firstTok?((performance.now()-firstTok)/1000):1; setStats("—",(nChunks/Math.max(gs,.01)).toFixed(1),"—",nChunks+"~",tt); }
+  return{answer,timings,tt,ttft};
+}
+
+async function logExchange(kind,port,prompt,res){
+  if(!res) return null;
+  try{
+    const r=await fetch("/api/chatlog",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({kind,port:+port,prompt,answer:res.answer,timings:res.timings,ttft:res.ttft,tt:res.tt})});
+    return(await r.json()).file;
+  }catch(e){ return null; }
+}
+
+async function send(){
+  if(busy) return;
+  const port=g("chatport").value, ta=g("prompt"), text=ta.value.trim();
+  if(!port){ alert("Sin instancias activas"); return; } if(!text) return;
+  busy=true; g("sendbtn").disabled=true; ta.value="";
+  addMsg("user",text); chatHistory.push({role:"user",content:text});
+  const out=addMsg("assistant",""); setStats("—","—","—","—","—");
+  const mx=+g("chatmax").value||null;
+  const res=await streamChat(port,chatHistory,out,mx);
+  if(res){ chatHistory.push({role:"assistant",content:res.answer}); logExchange("chat",port,text,res); }
+  busy=false; g("sendbtn").disabled=false;
+}
+
+// ── Benchmark ─────────────────────────────────────────────────────────────
+const BENCH_PARA="El sistema de control industrial supervisa de forma continua las variables del proceso: "+
+"temperatura de consigna, presion diferencial, caudal masico, nivel de deposito y estado de los actuadores. "+
+"Cada ciclo de scan el PLC lee las entradas analogicas, ejecuta la logica de control con sus lazos PID, "+
+"actualiza las salidas digitales hacia variadores y electrovalvulas, y registra los eventos en el historiador. ";
+async function bench(){
+  if(busy) return; const port=g("chatport").value; if(!port){ alert("Sin instancias"); return; }
+  busy=true; g("sendbtn").disabled=true;
+  const messages=[{role:"user",content:BENCH_PARA.repeat(45)+"\n\nResume en una frase y luego escribe ~400 palabras sobre arquitectura SCADA en prosa."}];
+  addMsg("user","⏱ BENCHMARK (~3K tokens entrada / ~500 salida)");
+  const out=addMsg("assistant",""); setStats("—","—","—","—","—");
+  const res=await streamChat(port,messages,out);
+  if(res&&res.timings){ const t=res.timings; addMsg("user",`⏱ prompt: ${(t.prompt_per_second||0).toFixed(1)} t/s · gen: ${(t.predicted_per_second||0).toFixed(1)} t/s · ${t.predicted_n} tok · ${res.tt} s`); logExchange("bench",port,"(benchmark)",res); }
+  busy=false; g("sendbtn").disabled=false;
+}
+
+// ── Test código (con skill inyectado) ────────────────────────────────────
+const CODE_PROMPT_BASE=
+"Implementa en C# con Blazor Server el servicio completo `LaserDetectionService` para un perfilometro laser de productos carnicos.\n"+
+"Contexto del sistema:\n\n"+
+"* Cinta transportadora con encoder, producto (panceta) maximo 600x400x40mm\n"+
+"* Camara B/N con filtro verde detecta linea laser verde sobre la cinta\n"+
+"* La deformacion de la linea indica la altura Z del producto\n"+
+"Requisitos del servicio:\n\n"+
+"1. Reciba un frame de camara como `byte[]` (PNG)\n"+
+"2. Use OpenCvSharp4 para convertir a Mat\n"+
+"3. Aplique umbral HSV para detectar linea laser verde (Hue 45-90, Sat 25-255, Val configurable)\n"+
+"4. Filtre contornos por area minima configurable\n"+
+"5. Para cada columna X calcule Y media de pixeles detectados\n"+
+"6. Use acceso directo a punteros unsafe para maximo rendimiento en tiempo real\n"+
+"7. Devuelva `LaserProfile` con: Points (X,Y), ZeroReferenceY (calibrado), Heights (zero_ref - Y)\n"+
+"8. Implemente `ILaserDetectionService` inyectable por DI\n"+
+"9. Metodo async con `Task.Run` para no bloquear Blazor Server\n"+
+"10. Incluye `Program.cs` con registro DI y ejemplo de componente Razor\n"+
+"El codigo debe compilar sin errores, APIs correctas de OpenCvSharp4, convenciones C# modernas.";
+
+async function codeTest(){
+  if(busy) return; const port=g("chatport").value; if(!port){ alert("Sin instancias"); return; }
+  busy=true; g("sendbtn").disabled=true;
+
+  // Inyectar skill si hay uno seleccionado
+  let prompt=CODE_PROMPT_BASE;
+  if(loadedSkillContent){
+    prompt="# Referencia de APIs (usa SOLO estas, no inventes otras):\n\n"+
+           loadedSkillContent+"\n\n---\n\n"+prompt;
+    addMsg("user","🧪 TEST CÓDIGO + SKILL: "+g("codeSkill").options[g("codeSkill").selectedIndex]?.text);
+  } else {
+    addMsg("user","🧪 TEST CÓDIGO — LaserDetectionService");
+  }
+
+  const out=addMsg("assistant",""); setStats("—","—","—","—","—");
+  const mx=+g("chatmax").value||null;
+  const res=await streamChat(port,[{role:"user",content:prompt}],out,mx);
+  if(res){ const file=await logExchange("code_test",port,prompt,res); const t=res.timings||{}; addMsg("user",`🧪 Guardado: ${file||"?"} · gen ${(t.predicted_per_second||0).toFixed(1)} t/s · ${t.predicted_n||"?"} tok · ${res.tt} s`); }
+  busy=false; g("sendbtn").disabled=false;
+}
+
+// ── Test CC ───────────────────────────────────────────────────────────────
+async function ccTest(){
+  if(busy) return; const port=g("chatport").value; if(!port){ alert("Sin instancias"); return; }
+  busy=true; g("sendbtn").disabled=true;
+  addMsg("user","⚡ TEST CLAUDE CODE — handshake tool_use");
+  const out=addMsg("assistant","probando…"); setStats("—","—","—","—","—");
+  try{
+    const r=await fetch("/api/cctest",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({port:+port})});
+    const j=await r.json();
+    if(j.ok){ out.textContent="✅ "+j.msg+"\n\ntool: "+j.tool_name+"  input: "+JSON.stringify(j.tool_input||{})+"\nstop_reason: "+j.stop_reason+(j.usage?`  ·  in/out: ${j.usage.input_tokens}/${j.usage.output_tokens}`:""); out.style.color="var(--ok)"; }
+    else{ out.textContent="❌ ["+j.stage+"] "+j.msg+(j.text?("\n\n"+j.text):""); out.style.color="var(--bad)"; }
+  }catch(e){ out.textContent="❌ "+e; out.style.color="var(--bad)"; }
+  busy=false; g("sendbtn").disabled=false;
+}
+
+// ── Skills ────────────────────────────────────────────────────────────────
+async function loadSkills(){
+  const r=await fetch("/api/skills"); const d=await r.json();
+  const skills=d.skills||[];
+
+  // Poblar selector en panel chat
+  const sel=g("codeSkill");
+  const cur=sel.value;
+  sel.innerHTML=`<option value="">Sin skill (prompt directo)</option>`+
+    skills.map(s=>`<option value="${s.filename}">${s.name}</option>`).join("");
+  if(cur) sel.value=cur;
+
+  // Mostrar cards en panel skills
+  g("skillsList").innerHTML=skills.length
+    ?skills.map(s=>`<div class="skill-card" onclick="previewSkill('${s.filename}')">
+        <h4>📄 ${s.name}</h4>
+        <div class="skill-meta">${s.filename} · ${(s.size/1024).toFixed(1)} KB · clic para previsualizar</div>
+      </div>`).join("")
+    :`<p class="muted">No hay skills. Crea ficheros .md en la carpeta <code>skills/</code>.</p>`;
+}
+
+async function previewSkill(filename){
+  const r=await fetch("/api/skills/"+filename); const d=await r.json();
+  const box=g("skillContent");
+  box.textContent=d.content||d.error;
+  box.style.display="block";
+}
+
+// Cargar skill seleccionado para inyectar en el test
+g("codeSkill").addEventListener("change",async()=>{
+  const filename=g("codeSkill").value;
+  const badge=g("skillLoadedBadge");
+  if(!filename){ loadedSkillContent=""; badge.style.display="none"; return; }
+  const r=await fetch("/api/skills/"+filename); const d=await r.json();
+  loadedSkillContent=d.content||"";
+  badge.style.display=loadedSkillContent?"inline":"none";
+});
+
+// ── Preset port auto-rellenar ─────────────────────────────────────────────
+document.addEventListener("change",e=>{
+  if(e.target.id!=="port"||!STATE) return;
+  const p=STATE.presets[e.target.value]; if(!p) return;
+  applyCfg(p);
+});
+
+g("prompt").addEventListener("keydown",e=>{ if(e.key==="Enter"&&e.ctrlKey){ e.preventDefault(); send(); } });
+
+// ── Agente ────────────────────────────────────────────────────────────────
+let agentRunning = false;
+
+async function loadAgentTools(){
+  try{
+    const r=await fetch("/api/agent_tools"); const d=await r.json();
+    const badges=g("agentToolsBadges");
+    badges.innerHTML=`<span style="font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-right:4px">Tools disponibles:</span>`+
+      (d.tools||[]).map(t=>`<span style="background:var(--panel2);border:1px solid var(--tools);color:var(--tools);
+        border-radius:3px;padding:2px 8px;font-size:11px;font-family:var(--mono)">🔧 ${t}</span>`).join("");
+    // Cargar tarea por defecto si el campo está vacío
+    if(!g("agentTask").value && d.default_task)
+      g("agentTask").value=d.default_task;
+  }catch(e){}
+}
+
+function loadDefaultTask(){
+  fetch("/api/agent_tools").then(r=>r.json()).then(d=>{
+    if(d.default_task) g("agentTask").value=d.default_task;
+  });
+}
+
+function clearAgent(){
+  g("agentLog").textContent="";
+  g("agentResult").style.display="none";
+  g("agentMetrics").style.display="none";
+}
+
+function agentLog(msg, color=""){
+  const el=g("agentLog");
+  const line=document.createElement("div");
+  if(color) line.style.color=color;
+  line.textContent=msg;
+  el.appendChild(line);
+  el.scrollTop=el.scrollHeight;
+}
+
+async function runAgentTest(){
+  if(agentRunning) return;
+  const port=g("agentport").value;
+  if(!port){ alert("Sin instancias activas"); return; }
+
+  agentRunning=true;
+  g("agentBtn").disabled=true;
+  g("agentBtn").textContent="⏳ ejecutando...";
+  clearAgent();
+  g("agentMetrics").style.display="none";
+
+  const task=g("agentTask").value.trim();
+  const maxTurns=+g("agentMaxTurns").value||10;
+
+  agentLog("▶ Iniciando test de agente...", "var(--amber)");
+  agentLog("Tarea: "+task.slice(0,120)+(task.length>120?"...":""), "var(--dim)");
+  agentLog("─".repeat(60), "var(--line)");
+
+  try{
+    const resp=await fetch("/api/agent_test",{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({port:+port, task, max_turns:maxTurns})
+    });
+    if(!resp.ok){ agentLog("ERROR HTTP "+resp.status, "var(--bad)"); return; }
+
+    const reader=resp.body.getReader(); const dec=new TextDecoder(); let buf="";
+    while(true){
+      const{done,value}=await reader.read(); if(done) break;
+      buf+=dec.decode(value,{stream:true}).replace(/\r/g,"");
+      let idx;
+      while((idx=buf.indexOf("\n\n"))>=0){
+        const line=buf.slice(0,idx).trim(); buf=buf.slice(idx+2);
+        if(!line.startsWith("data:")) continue;
+        const data=line.slice(5).trim();
+        let ev; try{ ev=JSON.parse(data); }catch(e){ continue; }
+
+        switch(ev.type){
+          case "start":
+            agentLog(`Modelo: ${ev.model} · Máx. turnos: ${ev.max_turns}`, "var(--dim)");
+            break;
+          case "turn":
+            agentLog(`\n[Turno ${ev.turn}] ${ev.msg}`, "var(--warn)");
+            break;
+          case "timings":
+            agentLog(`  ⏱ prompt ${ev.prompt_tps} t/s (${ev.prompt_n} tok) · gen ${ev.gen_tps} t/s (${ev.gen_n} tok) · ${ev.turn_s}s`, "var(--dim)");
+            break;
+          case "tool_call":
+            agentLog(`  🔧 ${ev.tool}(${ev.args.slice(0,120)})`, "var(--tools)");
+            break;
+          case "tool_result":
+            agentLog(`  ↳ ${ev.result.slice(0,200)}${ev.result.length>200?"...":""}`, "var(--dim)");
+            break;
+          case "warning":
+            agentLog(`  ${ev.msg}`, "var(--bad)");
+            break;
+          case "error":
+            agentLog(`ERROR: ${ev.msg}`, "var(--bad)");
+            break;
+          case "done":
+            agentLog("\n"+"─".repeat(60), "var(--line)");
+            if(ev.written_files?.length)
+              agentLog(`📄 Ficheros: ${ev.written_files.join(", ")}`, "var(--ok)");
+            agentLog(`💾 ${ev.saved_to||"logs/agent_results.jsonl"}`, "var(--dim)");
+            const res=g("agentResult");
+            res.style.display="block";
+            res.style.background=ev.success?"#0d2e1a":"#2e0d0d";
+            res.style.border=`1px solid ${ev.success?"var(--ok)":"var(--bad)"}`;
+            res.style.color=ev.success?"var(--ok)":"var(--bad)";
+            res.innerHTML=`<b>${ev.success?"✅ TAREA COMPLETADA":"❌ TAREA NO COMPLETADA"}</b>\n\n`+
+              (ev.final_message||"").slice(0,600);
+            const mm=g("agentMetrics");
+            mm.style.display="block";
+            g("m-turns").textContent=ev.turns;
+            g("m-time").textContent=ev.elapsed_s+" s";
+            g("m-tools").textContent=(ev.tool_calls||[]).join(" → ")||"ninguna";
+            g("m-invented").textContent=(ev.invented_tools?.length)?(ev.invented_tools.join(", ")):"✓ ninguna";
+            g("m-invented").style.color=(ev.invented_tools?.length)?"var(--bad)":"var(--ok)";
+            g("m-success").textContent=ev.success?"✓ éxito":"✗ fallo";
+            g("m-success").style.color=ev.success?"var(--ok)":"var(--bad)";
+            if(ev.prompt_tps_avg||ev.gen_tps_avg)
+              agentLog(`\n📊 prompt ${ev.prompt_tps_avg} t/s · gen ${ev.gen_tps_avg} t/s · ${ev.total_prompt_tokens} prompt tok · ${ev.total_gen_tokens} gen tok`, "var(--amber)");
+            break;
+        }
+      }
+    }
+  }catch(e){
+    agentLog("ERROR: "+e, "var(--bad)");
+  }finally{
+    agentRunning=false;
+    g("agentBtn").disabled=false;
+    g("agentBtn").textContent="▶ EJECUTAR";
+  }
+}
+
+// ── Descargas Hugging Face ─────────────────────────────────────────────────
+let _hfResults=[], _hfRepo=null, _hfFiles=[], _hfPoll=null;
+const fmtGB = n => n>=1024**3 ? (n/1024**3).toFixed(2)+" GB" : Math.round(n/1024)+" MB";
+
+async function hfSearch(){
+  const q=g("hfQuery").value.trim();
+  if(!q) return;
+  g("hfSearchResults").innerHTML=`<p class="muted">Buscando "${q}"…</p>`;
+  g("hfFiles").style.display="none";
+  try{
+    const r=await fetch("/api/hf/search?q="+encodeURIComponent(q));
+    const j=await r.json();
+    if(j.error){ g("hfSearchResults").innerHTML=`<div class="err">${j.error}</div>`; return; }
+    if(j.dest_root) g("hfDest").textContent="→ "+j.dest_root;
+    _hfResults=j.results||[];
+    g("hfSearchResults").innerHTML=_hfResults.length
+      ?_hfResults.map((m,i)=>`<div class="skill-card" onclick="hfPickRepo(${i})">
+          <h4><a href="https://huggingface.co/${m.repo}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${m.repo} ↗</a></h4>
+          <div class="skill-meta">⬇ ${m.downloads?.toLocaleString()||0} descargas · ♥ ${m.likes||0} · act. ${m.updated||"?"}</div>
+        </div>`).join("")
+      :`<p class="muted">Sin resultados para "${q}".</p>`;
+  }catch(e){ g("hfSearchResults").innerHTML=`<div class="err">${e}</div>`; }
+}
+async function hfPickRepo(i){
+  const repo=_hfResults[i].repo;
+  _hfRepo=repo;
+  g("hfFiles").style.display="block";
+  g("hfFilesTitle").textContent=repo+" — listando ficheros…";
+  g("hfFilesList").innerHTML="";
+  try{
+    const r=await fetch("/api/hf/files?repo="+encodeURIComponent(repo));
+    const j=await r.json();
+    if(j.error){ g("hfFilesList").innerHTML=`<div class="err">${j.error}</div>`; return; }
+    _hfFiles=j.files||[];
+    g("hfFilesTitle").innerHTML=`${repo} — ${_hfFiles.length} ficheros .gguf/mmproj &nbsp;·&nbsp; <a href="https://huggingface.co/${repo}" target="_blank" rel="noopener">🔗 ver en Hugging Face</a>`;
+    g("hfFilesList").innerHTML=_hfFiles.length
+      ?_hfFiles.map((f,k)=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:4px;margin-bottom:6px;font-family:var(--mono);font-size:12px;background:var(--panel2)">
+          <div style="flex:1">${f.name}</div>
+          <div style="color:var(--dim)">${fmtGB(f.size)}</div>
+          <button class="profile-btn" onclick="hfDownload(${k})">⬇ Descargar</button>
+        </div>`).join("")
+      :`<p class="muted">Este repo no tiene ficheros .gguf.</p>`;
+  }catch(e){ g("hfFilesList").innerHTML=`<div class="err">${e}</div>`; }
+}
+async function hfDownload(k){
+  const f=_hfFiles[k]; if(!f||!_hfRepo) return;
+  const r=await fetch("/api/hf/download",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({repo:_hfRepo,file:f.name})});
+  const j=await r.json();
+  if(j.error) alert("Error: "+j.error);
+  hfPollProgress();
+}
+async function hfPollProgress(){
+  if(_hfPoll) return;
+  _hfPoll=setInterval(async()=>{
+    let j;
+    try{ const r=await fetch("/api/hf/progress"); j=await r.json(); }catch(e){ return; }
+    const dls=j.downloads||[];
+    g("badge-dl").textContent=dls.filter(d=>d.status==="downloading").length||"0";
+    g("hfDlList").innerHTML=dls.length
+      ?dls.map(d=>{
+          const pct=d.total?Math.min(100,Math.round(d.done/d.total*100)):"?";
+          let bar=`<div class="vrambar" style="width:100%;margin-top:5px"><i style="width:${d.status==="done"||d.status==="error"?100:pct}%"></i></div>`;
+          let tag = d.status==="downloading" ? `<span style="color:var(--warn)">${pct}% · ${d.speed} KB/s</span>`
+                  : d.status==="done"        ? `<span style="color:var(--ok)">✓ completada</span>`
+                  : d.status==="cancelled"   ? `<span style="color:var(--dim)">cancelada</span>`
+                  : `<span style="color:var(--bad)">✗ ${d.error||"error"}</span>`;
+          return `<div style="border:1px solid var(--line);border-radius:4px;padding:9px 12px;margin-bottom:8px;font-family:var(--mono);font-size:12px;background:var(--panel2)">
+            <div style="display:flex;gap:10px;align-items:center">
+              <div style="flex:1">${d.repo} :: ${d.file}</div>
+              <div style="color:var(--dim)">${fmtGB(d.done||0)}${d.total?" / "+fmtGB(d.total):""}</div>
+              ${tag}
+              ${d.status==="downloading"?`<button class="stop" onclick="hfCancel('${d.key}')">✕ CANCELAR</button>`:""}
+            </div>${d.status==="downloading"?bar:""}
+          </div>`;
+        }).join("")
+      :`<p class="muted">Sin descargas.</p>`;
+    if(!dls.some(d=>d.status==="downloading")){
+      clearInterval(_hfPoll); _hfPoll=null;
+      // al terminar, refresca la lista de modelos para que aparezca en la UI
+      refresh();
+    }
+  },1000);
+}
+async function hfCancel(key){
+  await fetch("/api/hf/cancel",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key})});
+  hfPollProgress();
+}
+
+// ── Cloud APIs · probar modelos online ───────────────────────────────────────
+let _cloudProv=null;     // presets cacheados tras /api/cloud/providers (1ª vez)
+let _cloudBusy=false;    // un chat a la vez contra la API remota
+const _cloudHist=[];     // historial de conversación de este panel
+
+async function cloudInit(){              // lazy: carga los presets solo al entrar 1ª vez a la página
+  if(_cloudProv) return;
+  try{
+    const d=await (await fetch("/api/cloud/providers")).json();
+    _cloudProv=d.providers||[];
+    const sel=g("cloudProvider");
+    sel.innerHTML=_cloud_prov_opt()+'<option value="custom">✏️ Personal (usa la URL de abajo)</option>';
+    if(!g("cloudUrl").value) g("cloudUrl").value=(_cloudProv[0]||{}).url||"";
+  }catch(e){ g("cloudStatus").textContent="(no pude cargar los presets: "+e+")"; }
+}
+function _cloud_prov_opt(){ return _cloudProv.map(p=>`<option value="${p.id}" ${p.has_key?' data-haskey="1"':''}>${p.name}${p.has_key?"  ✓":""}</option>`).join(""); }
+g("cloudProvider").addEventListener("change",()=>{        // elegir preset → rellena la URL base (excepto "custom")
+  if(g("cloudProvider").value==="custom") return;
+  const list=(typeof _cloudProv!=="undefined"&&_cloudProv)||[];   // let de script, no window.*
+  const p=list.find(x=>x.id===g("cloudProvider").value);          // buscar preset por id del <select>
+  if(p) g("cloudUrl").value=p.url;
+});
+
+async function cloudSaveKey(){
+  const url=g("cloudUrl").value.trim();
+  if(!url){ alert("Pon primero la URL base."); return; }
+  g("cloudStatus").textContent="guardando…";
+  try{
+    const r=await fetch("/api/cloud/keys",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({url,key:g("cloudKey").value.trim()})});
+    const d=await r.json(); if(d.error) throw new Error(d.error);
+    g("cloudStatus").textContent=d.has_key?"✓ clave guardada en memoria (no toca disco)":"— sin clave para esta URL";
+  }catch(e){ g("cloudStatus").textContent="✗ "+e; }
+}
+
+async function cloudLoadModels(){         // <base>/models vía backend → llena el selector de modelos
+  const url=g("cloudUrl").value.trim(); if(!url){ alert("Pon primero la URL base."); return; }
+  g("cloudStatus").textContent="listando modelos…";
+  try{
+    const d=await (await fetch("/api/cloud/models?url="+encodeURIComponent(url))).json();
+    if(d.error) throw new Error(d.error);
+    const sel=g("cloudModels");
+    sel.innerHTML=(d.models||[]).map(m=>`<option value="${m.id}">${(m.context_length?Math.round(+m.context_length/1024)+"K ctx · ":"")}${(m.name&&m.name!==m.id)?m.name+" — ":""}${m.id}</option>`).join("");
+    g("cloudMCount").textContent=(d.models||[]).length;
+    sel.disabled=!sel.options.length;
+    if(sel.options.length) g("cloudModelsWrap").style.display="block";
+    else throw new Error("la API devolvió 0 modelos — ¿URL termina en /v1? (ej. https://api.groq.com/openai/v1)");
+    g("cloudKeyState").textContent=d.has_key?"✓ clave guardada":(url.includes("//127.")||url.includes("localhost")?"":"⚠ sin clave para esta URL → las APIs que la exijan fallarán con 401");
+    g("cloudStatus").textContent="✓ "+(d.models||[]).length+" modelos listados";
+  }catch(e){ g("cloudKeyState").textContent=""; g("cloudStatus").textContent="✗ "+e; }
+}
+
+function _cAdd(role,text){                // mismos estilos .msg/.who que el chat local
+  const box=g("cloudBox");
+  if(box.querySelector(".muted")) box.innerHTML="";   // quita el placeholder la primera vez
+  const div=document.createElement("div"); div.className="msg "+role;
+  div.innerHTML=`<span class="who">${role==="user"?"TÚ":"API ONLINE"}</span>`;
+  const span=document.createElement("span"); span.textContent=text;
+  div.appendChild(span); box.appendChild(div); box.scrollTop=box.scrollHeight; return span;
+}
+
+async function cloudChat(){               // SSE vía /api/cloud/chat → streaming contra la API remota
+  if(_cloudBusy) return;
+  const prompt=g("cloudPrompt").value.trim(); if(!prompt){ alert("Escribe un prompt."); return; }
+  const url=g("cloudUrl").value.trim(), model=g("cloudModels")?g("cloudModels").value:"";
+  if(!url||!model){ alert("Primero fija la URL y pulsa «CARGAR MODELOS DE LA API» para elegir uno."); return; }
+  _cloudBusy=true; g("cloudSendBtn").disabled=true; g("cloudPrompt").value="";
+  const t0=performance.now();                                        // base del cronómetro (TTFT/gen/total)
+  _cAdd("user",prompt); _cloudHist.push({role:"user",content:prompt});
+  const out=_cAdd("assistant",""), box=g("cloudBox");
+  ["cloudTtft","cloudGen","cloudTotal"].forEach(id=>g(id).textContent="—");
+  let answer="",firstTok=null,nCh=0;
+  try{
+    const body={url,model,messages:_cloudHist.slice(-24)};   // últimas conversaciones, no la vida entera
+    if(g("cloudKey").value.trim()) body.key=g("cloudKey").value.trim();
+    const r=await fetch("/api/cloud/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(!r.ok){ let m="HTTP "+r.status; try{const e=(await r.json()).error; if(e) m+=". "+e;}catch(_){} throw new Error(m); }
+    const reader=r.body.getReader(), dec=new TextDecoder(); let buf="";
+    while(true){
+      const {done,value}=await reader.read(); if(done) break;
+      buf+=dec.decode(value,{stream:true}).replace(/\r/g,"");
+      let idx;
+      while((idx=buf.indexOf("\n\n"))>=0){
+        const line=buf.slice(0,idx).trim(); buf=buf.slice(idx+2);
+        if(!line.startsWith("data:")) continue;
+        const data=line.slice(5).trim(); if(data==="[DONE]") continue;
+        let j; try{ j=JSON.parse(data); }catch(_){ continue; }
+        if(j.error){ answer+="\n[ERROR] "+j.error; out.textContent=answer; box.scrollTop=box.scrollHeight; _cloudBusy=false; g("cloudSendBtn").disabled=false; return; }
+        const d=j.choices?.[0]?.delta||{};
+        if(d.reasoning_content) firstTok??=performance.now();
+        if(d.content){ if(firstTok===null) firstTok=performance.now(); answer+=d.content; nCh++; out.textContent=answer; box.scrollTop=box.scrollHeight; }
+      }
+    }
+  }catch(e){ answer+="\n[ERROR] "+e; out.textContent=answer; }
+  const t1=performance.now(), tt=(t1-t0)/1000, ttft=firstTok?(firstTok-t0)/1000:null;   // métricas finales (TTFT / gen aprox. / total)
+  g("cloudTotal").textContent=tt.toFixed(2);
+  if(firstTok){ const gs=(t1-firstTok)/1000; g("cloudTtft").textContent=ttft.toFixed(2)+" s"; if(gs>0.05&&nCh) g("cloudGen").textContent=(nCh/gs).toFixed(1); }
+  else { g("cloudTtft").textContent="—"; g("cloudGen").textContent=nCh?"<1":"—"; }
+  // guardar la respuesta (solo limpia) para dar contexto a los turnos siguientes; un [ERROR] no contamina el historial
+  if(answer && !answer.includes("[ERROR]")) _cloudHist.push({role:"assistant",content:answer});
+}
+
+// ── Nodos remotos ────────────────────────────────────────────────────────
+// `peers` es un let del scope de este <script>: no se expone a window (ver la
+// nota sobre declaraciones léxicas), así que TODA esta sección lo usa por su
+// nombre en bruto y nunca como window.peers.
+let peers = [];          // [{id, base}] nodos remotos guardados
+let peersTimer = null;   // id del intervalo de refresco (o null si no corre)
+
+function gb(mib){ return (mib/1024).toFixed(1)+" GB"; }
+
+// Monta el HTML de una tarjeta de nodo a partir del objeto /api/host.
+// host = {hostname:{...}, engine, gpus:[{name,total_mib,used_mib,free_mib}],
+//          ram_total_mib, ram_used_mib, instances:[...]}. tag = "LOCAL"|"REMOTO".
+function peerCardHTML(host, base, tag, ok, errText){
+  const hn = (host.hostname && host.hostname.hostname) || base;
+  const os = (host.hostname && host.hostname.os) || "";
+  const cpu = (host.hostname && host.hostname.cpu) || "";
+
+  let gpus = "";
+  (host.gpus||[]).forEach(d=>{
+    const pct = d.total_mib ? Math.min(100, Math.round(d.used_mib/d.total_mib*100)) : 0;
+    gpus += `<div class="peer-gpu">
+      <span class="gname">${d.name}</span>
+      <span class="vrambar" style="width:120px"><i style="width:${pct}%"></i></span>
+      <span class="peer-mib">${gb(d.used_mib)} / ${gb(d.total_mib)}</span>
+    </div>`;
+  });
+
+  let inst = "";
+  if((host.instances||[]).length){
+    inst = `<div class="peer-instances">Corriendo: ` +
+      host.instances.map(i=>`<b>${i.alias||i.model||(":"+i.port)}</b>`).join(", ") + `</div>`;
+  } else {
+    inst = `<div class="peer-instances" style="opacity:.6">sin instancias corriendo</div>`;
+  }
+
+  return `<div class="peer-head">
+    <span class="peer-dot ${ok?'ok':'err'}"></span>
+    <span class="peer-hostname">${hn}</span>
+    <span class="peer-sub">${[os,cpu].filter(Boolean).join(" · ")}</span>
+    <span class="peer-tag">${tag}</span>
+  </div>` +
+  (ok ? (
+     `<div class="peer-ratio">RAM ${gb(host.ram_used_mib||0)} / ${gb(host.ram_total_mib||0)} · motor: ${host.engine||"—"}</div>` +
+     gpus + inst
+  ) : (
+     `<div class="peer-err">${errText||"sin conexión"}</div>`
+  ));
+}
+
+// fetch a http://base/api/host con timeout corto; devuelve {ok, host?, err?}.
+function fetchHost(base){
+  return new Promise(resolve=>{
+    const ctrl = (typeof AbortController!=="undefined") ? new AbortController() : null;
+    if(ctrl) setTimeout(()=>{try{ctrl.abort()}catch(e){}}, 4000);
+    fetch(`http://${base}/api/host`, {signal: ctrl?ctrl.signal:undefined})
+      .then(r=>{ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+      .then(host=>resolve({ok:true, host}))
+      .catch(e=>resolve({ok:false, err: e.name==="AbortError" ? "tiempo de espera agotado" : (e.message||"sin conexión")}));
+  });
+}
+
+// Dibuja la tarjeta local + los remotos. `localData` = {ok,host,err}.
+function renderPeers(localData){
+  const localHost = localData && localData.ok ? localData.host : null;
+  const lc = g("peersLocalCard");
+  if(lc) lc.innerHTML = peerCardHTML(
+      localHost || {gpus:[],instances:[]}, location.host, "LOCAL",
+      !!(localHost), (localData&&localData.err)||"no se pudo leer el estado local");
+
+  const listEl = g("peersList");
+  if(!listEl) return;
+  // refresco cada nodo remoto por separado (cada uno puede caerse a su aire)
+  let html = "";
+  peers.forEach(p=>{
+    // marcador con data-base para re-renderizar tras el fetch asincrónico
+    html += `<div class="peer-card" id="peer-${p.id}">
+      <div class="peer-head"><span class="peer-dot"></span>
+      <span class="peer-hostname">${p.base}</span>
+      <span class="peer-sub">cargando…</span>
+      <span class="peer-tag">REMOTO</span>
+      <button class="peer-btn" onclick="removePeer('${p.id}')">✕ quitar</button></div>
+    </div>`;
+  });
+  listEl.innerHTML = html || (peers.length? "" : `<div class="muted" style="font-size:12.5px">Aún no has añadido ningún nodo remoto.</div>`);
+
+  // actualizar cada remoto en paralelo
+  peers.forEach(p=>{
+    fetchHost(p.base).then(res=>{
+      const el = g("peer-"+p.id); if(!el) return;
+      if(res.ok){
+        // conservamos el botón "quitar"
+        const btn = el.querySelector(".peer-btn").outerHTML;
+        el.innerHTML = peerCardHTML(res.host, p.base, "REMOTO", true) +
+                       `<div style="text-align:right;margin-top:6px">${btn}</div>`;
+      } else {
+        const btn = (el.querySelector(".peer-btn")||{outerHTML:""}).outerHTML;
+        el.innerHTML = peerCardHTML({gpus:[],instances:[]}, p.base, "REMOTO", false, res.err) +
+                       `<div style="text-align:right;margin-top:6px">${btn}</div>`;
+      }
+    });
+  });
+
+  const b = g("badge-peers"); if(b) b.textContent = peers.length;
+}
+
+// Arranca/para el refresco automático cada 5 s, solo mientras la pestaña esté visible.
+function startPeersPolling(){
+  if(peersTimer) return;
+  peersTimer = setInterval(()=>{
+    // auto-apagado: si ya no estamos en la pestaña de nodos, parar el timer.
+    if(!g("page-peers") || !g("page-peers").classList.contains("active")){ stopPeersPolling(); return; }
+    fetchHost(location.host).then(d=>renderPeers(d));
+    peers.forEach(p=>fetchHost(p.base).then(res=>{
+      const el=g("peer-"+p.id); if(!el) return;
+      const btn=(el.querySelector(".peer-btn")||{outerHTML:""}).outerHTML;
+      el.innerHTML = peerCardHTML(res.ok?res.host:{gpus:[],instances:[]}, p.base, "REMOTO",
+        res.ok, res.err) + `<div style="text-align:right;margin-top:6px">${btn}</div>`;
+    }));
+  }, 5000);
+}
+function stopPeersPolling(){ if(peersTimer){ clearInterval(peersTimer); peersTimer=null; } }
+
+// Carga la lista de nodos guardados y dibuja todo (una vez al abrir la pestaña).
+async function loadPeers(){
+  try{
+    const r = await fetch("/api/peers"); const j = await r.json();
+    peers = j.peers || [];
+  }catch(e){ peers = []; }
+  // /api/host local: el MISMO endpoint que el remoto, así la tarjeta local
+  // se renderiza con exactamente el mismo código.
+  let localData;
+  try{ const rr=await fetch("/api/host"); localData={ok:true, host:await rr.json()}; }
+  catch(e){ localData={ok:false, err:e.message}; }
+  renderPeers(localData);
+  startPeersPolling();
+}
+
+async function addPeer(){
+  const inp = g("peerInput"); if(!inp) return;
+  const base = inp.value.trim();
+  if(!base) return;
+  try{
+    await fetch("/api/peers", {method:"POST", headers:{"Content-Type":"application/json"},
+                              body: JSON.stringify({base})});
+  }catch(e){}
+  inp.value = "";
+  await loadPeers();
+}
+
+async function removePeer(id){
+  try{ await fetch("/api/peers/"+encodeURIComponent(id), {method:"DELETE"}); }catch(e){}
+  await loadPeers();
+}
+
+// ── Arranque ──────────────────────────────────────────────────────────────
+refresh(); setInterval(refresh,5000);
+loadSkills();
+loadAgentTools();
+hfPollProgress();
+cloudInit().then(()=>{ /* presets listos */ });
+</script>
+</body>
+</html>

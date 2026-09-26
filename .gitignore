@@ -1,0 +1,18 @@
+# datos locales de cada equipo (el updater tampoco los toca)
+presets.json
+logs/
+python/
+llama-*/
+.installed_commit
+github_token.txt
+# builds y basura
+__pycache__/
+*.pyc
+*.bak
+*.upd
+dist/
+build/
+LlamaManager-Portable*/
+LlamaManager-*.zip
+limpiar_v44.bat
+nul

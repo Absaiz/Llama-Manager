@@ -1,0 +1,5 @@
+* text=auto
+# .bat/.ps1 se guardan TAL CUAL con CRLF (cmd falla con LF); el zip de GitHub los entrega igual
+*.bat -text
+*.ps1 -text
+*.py text eol=lf
